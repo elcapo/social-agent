@@ -1,0 +1,15 @@
+click>=8.0
+fastapi>=0.110
+uvicorn[standard]
+pydantic>=2.0
+pydantic-settings
+pyyaml
+httpx
+feedparser
+beautifulsoup4
+litellm
+python-frontmatter
+
+[dev]
+pytest>=8.0
+ruff>=0.3

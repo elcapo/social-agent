@@ -1,0 +1,2 @@
+[console_scripts]
+social-agent = social_agent.cli.commands:cli
