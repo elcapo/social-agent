@@ -88,10 +88,10 @@ social-agent/
 - [x] Verificar que tests pasan
 
 ### Fase 2 — Sistema de recolección e ideación
-- [ ] Sistema de prompts (interests + fuentes)
-- [ ] Collectors (RSS, web scraping)
-- [ ] Ideator agent (LLM vía LiteLLM)
-- [ ] Tests
+- [x] Sistema de prompts (interests + fuentes)
+- [x] Collectors (RSS, web scraping, social) — RSSCollector, WebScraperCollector, TwitterCollector, LinkedInCollector
+- [x] Ideator agent (LLM vía LiteLLM)
+- [x] Tests — 27 tests, todos pasan
 
 ### Fase 3 — Writer y drafts multi-plataforma
 - [ ] Prompts de plataforma (Twitter, LinkedIn)

@@ -9,6 +9,9 @@ __pycache__/
 # Cache de Ruff
 .ruff_cache/
 
+# Fichero de entorno (contiene claves API)
+.env
+
 # Datos de usuario (prompts, fuentes, seeds, drafts, publicado)
 data/
 

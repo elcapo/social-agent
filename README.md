@@ -20,6 +20,60 @@ uv sync
 uv run social-agent --help
 ```
 
+## Configuración
+
+Copia el fichero de entorno y edítalo:
+
+```bash
+cp .env.example .env
+```
+
+### Proveedor LLM
+
+El sistema usa [LiteLLM](https://litellm.vercel.app/) y soporta cualquier
+proveedor compatible (OpenAI, Anthropic, Ollama, etc.).
+
+```env
+# OpenAI (por defecto)
+SOCIAL_AGENT_LLM_PROVIDER=openai/gpt-4o
+SOCIAL_AGENT_LLM_API_KEY=sk-...
+
+# Anthropic Claude
+# SOCIAL_AGENT_LLM_PROVIDER=claude-3-haiku-20240307
+# SOCIAL_AGENT_LLM_API_KEY=sk-ant-...
+
+# Ollama (local)
+# SOCIAL_AGENT_LLM_PROVIDER=ollama/llama3
+# SOCIAL_AGENT_LLM_BASE_URL=http://localhost:11434
+```
+
+### APIs de redes sociales
+
+Los colectores sociales requieren credenciales de la API correspondiente.
+
+#### Twitter / X (API v2)
+
+1. Ve a [developer.twitter.com](https://developer.twitter.com) y crea un proyecto.
+2. Genera un *Bearer Token* en la sección "Keys and Tokens".
+3. Añádelo al `.env`:
+
+```env
+SOCIAL_AGENT_TWITTER_BEARER_TOKEN=AAAAAAAAAAAAAAAAAAAA...
+```
+
+#### LinkedIn
+
+1. Ve a [developer.linkedin.com](https://developer.linkedin.com) y crea una app.
+2. Solicita los scopes `w_member_social` y `r_liteprofile`.
+3. Genera un *Access Token* y añádelo al `.env`:
+
+```env
+SOCIAL_AGENT_LINKEDIN_ACCESS_TOKEN=AQW...
+```
+
+Sin estas credenciales los colectores sociales devuelven lista vacía.
+Las fuentes RSS y web scraping no requieren autenticación.
+
 ## Desarrollo
 
 ```bash

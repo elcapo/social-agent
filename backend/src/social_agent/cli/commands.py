@@ -3,10 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+import frontmatter
 
+from social_agent.agents.ideator import IdeatorAgent
+from social_agent.collectors import RSSCollector, WebScraperCollector
+from social_agent.collectors.social import LinkedInCollector, TwitterCollector
+from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.seed import Seed, SeedStatus
-from social_agent.models.source import Source
+from social_agent.models.source import Source, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
 
 DATA_DIR = Path("data")
@@ -71,6 +76,75 @@ def sources_add(name: str, source_type: str, url: str, priority: int, tags: str)
 @cli.group()
 def seeds() -> None:
     """Manage seed ideas."""
+
+
+def _build_collector(source: Source):
+    match source.source_type:
+        case SourceType.rss:
+            return RSSCollector(source.id, source.name, source.url, source.tags)
+        case SourceType.webpage:
+            return WebScraperCollector(source.id, source.name, source.url, source.tags)
+        case SourceType.social:
+            if "twitter" in source.url:
+                return TwitterCollector(
+                    source.id, source.name, source.url, source.tags,
+                    bearer_token=settings.twitter_bearer_token,
+                )
+            if "linkedin" in source.url:
+                return LinkedInCollector(
+                    source.id, source.name, source.url, source.tags,
+                    access_token=settings.linkedin_access_token,
+                )
+            return None
+        case _:
+            return None
+
+
+@seeds.command("generate")
+@click.option("--interests", default=None, help="Path to interests prompt file")
+def seeds_generate(interests: str | None) -> None:
+    """Generate seed ideas from sources + interests."""
+    interests_path = Path(interests) if interests else settings.prompts_dir / "interests.md"
+    if not interests_path.exists():
+        click.echo(f"Interests file not found: {interests_path}")
+        click.echo("Create it from template: cp templates/prompts/interests.md data/prompts/")
+        return
+
+    with open(interests_path) as f:
+        post = frontmatter.load(f)
+        interests_text = post.content.strip()
+
+    sources = source_store.list(filter_fn=lambda s: s.enabled)
+    if not sources:
+        click.echo("No enabled sources found. Add one first: social-agent sources add ...")
+        return
+
+    all_items = []
+    for src in sources:
+        collector = _build_collector(src)
+        if collector is None:
+            continue
+        click.echo(f"Fetching: {src.name} ({src.source_type.value})...")
+        try:
+            items = collector.fetch()
+            all_items.extend(items)
+            click.echo(f"  -> {len(items)} items")
+        except Exception as e:
+            click.echo(f"  -> Error: {e}")
+
+    if not all_items:
+        click.echo("No content collected from any source.")
+        return
+
+    click.echo(f"\nGenerating seeds with Ideator ({len(all_items)} items)...")
+    ideator = IdeatorAgent()
+    seeds_list = ideator.generate_seeds(interests_text, all_items)
+
+    for seed in seeds_list:
+        seed_store.save(seed)
+        click.echo(f"  Created: {seed.id} - {seed.title}")
+
+    click.echo(f"\nDone. {len(seeds_list)} seeds generated.")
 
 
 @seeds.command("list")
