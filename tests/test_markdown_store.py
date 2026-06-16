@@ -1,10 +1,8 @@
 from pathlib import Path
 
 import pytest
-
 from social_agent.models.draft import Draft
 from social_agent.models.seed import Seed, SeedStatus
-from social_agent.models.source import Source, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
 
 

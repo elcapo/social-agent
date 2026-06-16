@@ -40,7 +40,9 @@ class MarkdownStore(Generic[T]):
         class Dumper(yaml.Dumper):
             pass
 
-        Dumper.add_representer(datetime, lambda dumper, data: dumper.represent_str(data.isoformat()))
+        Dumper.add_representer(
+            datetime, lambda d, v: d.represent_str(v.isoformat())
+        )
 
         return yaml.dump(
             data,

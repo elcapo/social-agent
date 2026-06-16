@@ -77,10 +77,10 @@ def seeds() -> None:
 @click.option("--status", default=None, help="Filter by status (pending, used, discarded)")
 def seeds_list(status: str | None) -> None:
     """List seed ideas."""
-    filter_fn = None
-    if status:
-        filter_fn = lambda s: s.status.value == status
+    def _match_status(s: Seed) -> bool:
+        return s.status.value == status
 
+    filter_fn = _match_status if status else None
     items = seed_store.list(filter_fn)
     if not items:
         click.echo("No seeds found.")
