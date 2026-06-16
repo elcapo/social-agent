@@ -33,10 +33,30 @@ cp .env.example .env
 El sistema usa [LiteLLM](https://litellm.vercel.app/) y soporta cualquier
 proveedor compatible (OpenAI, Anthropic, Ollama, etc.).
 
+El acceso a los modelos se hace a través de **OpenCode Zen**, que expone
+un endpoint compatible con la API de OpenAI:
+
 ```env
-# OpenAI (por defecto)
-SOCIAL_AGENT_LLM_PROVIDER=openai/gpt-4o
-SOCIAL_AGENT_LLM_API_KEY=sk-...
+# OpenCode Zen (DeepSeek V4 Flash Free — sin coste)
+SOCIAL_AGENT_LLM_PROVIDER=openai/deepseek-v4-flash-free
+SOCIAL_AGENT_LLM_API_KEY=sk-...   # Tu API key de https://opencode.ai/auth
+SOCIAL_AGENT_LLM_BASE_URL=https://opencode.ai/zen/v1
+```
+
+Otros modelos disponibles vía Zen (`https://opencode.ai/docs/zen/`):
+
+```env
+# SOCIAL_AGENT_LLM_PROVIDER=openai/deepseek-v4-flash
+# SOCIAL_AGENT_LLM_PROVIDER=openai/gpt-5.4-nano
+# SOCIAL_AGENT_LLM_PROVIDER=openai/claude-sonnet-4-6
+```
+
+También puedes usar cualquier otro proveedor directamente:
+
+```env
+# OpenAI directo
+# SOCIAL_AGENT_LLM_PROVIDER=openai/gpt-4o
+# SOCIAL_AGENT_LLM_API_KEY=sk-...
 
 # Anthropic Claude
 # SOCIAL_AGENT_LLM_PROVIDER=claude-3-haiku-20240307
@@ -102,9 +122,20 @@ social-agent sources list
 
 ### Semillas (`seeds`)
 
-Las semillas son ideas generales para posts, generadas por el ideador a partir de las fuentes y tus intereses. Se listan, revisan y pueden descartarse.
+Las semillas son ideas generales para posts, generadas por el *agente ideador*
+a partir de las fuentes y tus intereses. Se generan, listan, revisan y pueden
+descartarse.
 
 ```bash
+# Generar semillas desde las fuentes configuradas y el prompt de intereses
+social-agent seeds generate
+
+# Generar usando un fichero de intereses alternativo
+social-agent seeds generate --interests data/prompts/mis-intereses.md
+
+# Ver la respuesta cruda del LLM sin guardar (útil para depuración)
+social-agent seeds generate --dry-run
+
 # Ver todas las semillas
 social-agent seeds list
 

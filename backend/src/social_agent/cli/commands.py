@@ -102,7 +102,8 @@ def _build_collector(source: Source):
 
 @seeds.command("generate")
 @click.option("--interests", default=None, help="Path to interests prompt file")
-def seeds_generate(interests: str | None) -> None:
+@click.option("--dry-run", is_flag=True, help="Show raw LLM response without saving seeds")
+def seeds_generate(interests: str | None, dry_run: bool) -> None:
     """Generate seed ideas from sources + interests."""
     interests_path = Path(interests) if interests else settings.prompts_dir / "interests.md"
     if not interests_path.exists():
@@ -138,13 +139,20 @@ def seeds_generate(interests: str | None) -> None:
 
     click.echo(f"\nGenerating seeds with Ideator ({len(all_items)} items)...")
     ideator = IdeatorAgent()
-    seeds_list = ideator.generate_seeds(interests_text, all_items)
+    result = ideator.generate_seeds(interests_text, all_items, dry_run=dry_run)
 
-    for seed in seeds_list:
+    if dry_run:
+        import textwrap
+        click.echo("\n── Raw LLM response ──")
+        click.echo(textwrap.indent(str(result), "  "))
+        click.echo("─────────────────────")
+        return
+
+    for seed in result:
         seed_store.save(seed)
         click.echo(f"  Created: {seed.id} - {seed.title}")
 
-    click.echo(f"\nDone. {len(seeds_list)} seeds generated.")
+    click.echo(f"\nDone. {len(result)} seeds generated.")
 
 
 @seeds.command("list")
@@ -171,11 +179,12 @@ def seeds_show(seed_id: str) -> None:
     if not seed:
         click.echo(f"Seed '{seed_id}' not found.")
         return
-    click.echo(f"ID:      {seed.id}")
-    click.echo(f"Title:   {seed.title}")
-    click.echo(f"Status:  {seed.status.value}")
-    click.echo(f"Tags:    {', '.join(seed.tags)}")
-    click.echo(f"Summary: {seed.summary}")
+    click.echo(f"ID:        {seed.id}")
+    click.echo(f"Title:     {seed.title}")
+    click.echo(f"Status:    {seed.status.value}")
+    click.echo(f"Tags:      {', '.join(seed.tags)}")
+    click.echo(f"Source:    {seed.source_url or seed.source_id or '(none)'}")
+    click.echo(f"Summary:   {seed.summary}")
 
 
 @seeds.command("discard")

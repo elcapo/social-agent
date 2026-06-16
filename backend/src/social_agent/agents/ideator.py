@@ -1,11 +1,47 @@
 from __future__ import annotations
 
+import json
+import re
 from datetime import datetime, timezone
 
 from social_agent.collectors.base import CollectedItem
 from social_agent.models.seed import Seed, SeedStatus
 
 from .base import BaseAgent
+
+
+def _extract_json(text: str) -> list[dict] | None:
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return [data]
+        if isinstance(data, list):
+            return data
+    except json.JSONDecodeError:
+        pass
+
+    m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group(1))
+            if isinstance(data, dict):
+                return [data]
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+    m = re.search(r"\[\s*\{.*\}\s*\]", text, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group())
+            if isinstance(data, list):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
 
 SYSTEM_PROMPT = """Eres un ideator de contenido para redes sociales.
 
@@ -18,7 +54,8 @@ Reglas:
 - Las ideas deben ser relevantes a los intereses del usuario.
 - Genera ideas variadas, no repitas el mismo ángulo.
 - Responde SOLO con una lista de objetos JSON, sin markdown ni explicaciones.
-- Cada objeto debe tener: title (string), summary (string), tags (lista de strings)."""
+- Cada objeto debe tener: title, summary, tags (lista de strings), source_index (int).
+- source_index es el índice del contenido del que deriva la idea (el que está entre corchetes)."""
 
 
 USER_TEMPLATE = """## Intereses del usuario
@@ -39,12 +76,17 @@ class IdeatorAgent(BaseAgent):
         self,
         interests: str,
         collected_items: list[CollectedItem],
-    ) -> list[Seed]:
-        import json
+        dry_run: bool = False,
+    ) -> list[Seed] | str:
+        def _format_item(idx: int, item: CollectedItem) -> str:
+            return (
+                f"--- [{idx}] {item.title} ({item.source_name}) ---\n"
+                f"URL: {item.url}\n"
+                f"{item.content[:500]}"
+            )
 
         collected_text = "\n\n".join(
-            f"--- {item.title} ({item.source_name}) ---\n{item.content[:500]}"
-            for item in collected_items
+            _format_item(i, item) for i, item in enumerate(collected_items, start=1)
         )
 
         user_prompt = USER_TEMPLATE.format(
@@ -52,31 +94,32 @@ class IdeatorAgent(BaseAgent):
             collected=collected_text,
         )
 
-        response = self.run(user_prompt)
+        response = self.run(user_prompt, max_tokens=4096)
+        if dry_run:
+            return response
+
+        data = _extract_json(response)
+        if data is None:
+            return []
+
         seeds: list[Seed] = []
 
-        try:
-            data = json.loads(response)
-            if isinstance(data, dict):
-                data = [data]
-        except json.JSONDecodeError:
-            import re
+        for entry in data:
+            idx = entry.get("source_index")
+            src_id: str | None = None
+            src_url: str | None = None
+            if isinstance(idx, int) and 1 <= idx <= len(collected_items):
+                src = collected_items[idx - 1]
+                src_id = src.source_id
+                src_url = src.url
 
-            match = re.search(r"\[.*?\]", response, re.DOTALL)
-            if match:
-                try:
-                    data = json.loads(match.group())
-                except json.JSONDecodeError:
-                    return seeds
-            else:
-                return seeds
-
-        for item in data:
             seeds.append(
                 Seed(
-                    title=item.get("title", "Untitled"),
-                    summary=item.get("summary", ""),
-                    tags=item.get("tags", []),
+                    title=entry.get("title", "Untitled"),
+                    summary=entry.get("summary", ""),
+                    tags=entry.get("tags", []),
+                    source_id=src_id,
+                    source_url=src_url,
                     status=SeedStatus.pending,
                     created_at=datetime.now(timezone.utc),
                 )
