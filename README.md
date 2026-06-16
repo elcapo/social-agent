@@ -1,6 +1,6 @@
 # social-agent
 
-Sistema de agentes para gestión de redes sociales basado en LLM.
+Sistema de agentes para gestión de redes sociales.
 
 ## Requisitos
 
@@ -35,23 +35,62 @@ source .venv/bin/activate
 
 ## Uso básico
 
+El flujo de trabajo tiene tres etapas: **fuentes** → **semillas** → **drafts**.
+
+### Fuentes (`sources`)
+
+Registra de dónde quieres obtener información (RSS, webs, APIs sociales). Cada fuente tiene una prioridad (1 alta, 3 baja) que el *agente ideador* usará para ponderar su contenido.
+
 ```bash
-source .venv/bin/activate  # o anteponer `uv run` a cada comando
-
-# Añadir una fuente de información
 social-agent sources add "Rust Blog" rss "https://blog.rust-lang.org/feed" --priority 1
-
-# Listar fuentes
 social-agent sources list
+```
 
-# Listar seeds (ideas)
+### Semillas (`seeds`)
+
+Las semillas son ideas generales para posts, generadas por el ideador a partir de las fuentes y tus intereses. Se listan, revisan y pueden descartarse.
+
+```bash
+# Ver todas las semillas
 social-agent seeds list
 
-# Listar drafts por plataforma
+# Ver solo las pendientes
+social-agent seeds list --status pending
+
+# Ver el detalle de una semilla
+social-agent seeds show <seed_id>
+
+# Descartar una semilla
+social-agent seeds discard <seed_id>
+```
+
+### Drafts (`drafts`)
+
+Los borradores son versiones concretas del post adaptadas a cada plataforma (Twitter, LinkedIn, etc.), generadas por el *agente escritor* a partir de una semilla. Se revisan, editan, aprueban y publican.
+
+```bash
+# Ver todos los borradores
+social-agent drafts list
+
+# Ver los borradores de Twitter
 social-agent drafts list --platform twitter
 
-# Aprobar y publicar un draft
+# Ver los borradores aprobados
+social-agent drafts list --status approved
+
+# Ver el detalle de un borrador
+social-agent drafts show <draft_id>
+
+# Aprobar un borrador para su publicación
 social-agent drafts approve <draft_id>
+
+# Rechazar un borrador con una nota
+social-agent drafts reject <draft_id> --notes "muy técnico"
+
+# Editar un borrador
+social-agent drafts edit <draft_id> "nuevo contenido"
+
+# Marcar un borrador como publicado
 social-agent drafts publish <draft_id>
 ```
 
