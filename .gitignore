@@ -1,0 +1,22 @@
+# Entorno virtual
+.venv/
+
+# Cache de Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Cache de Ruff
+.ruff_cache/
+
+# Datos de usuario (prompts, fuentes, seeds, drafts, publicado)
+data/
+
+# Lockfile
+uv.lock
+
+# Editor
+*.swp
+*.swo
+*~
+.DS_Store

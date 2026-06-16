@@ -36,22 +36,36 @@ source .venv/bin/activate
 ## Uso básico
 
 ```bash
+source .venv/bin/activate  # o anteponer `uv run` a cada comando
+
 # Añadir una fuente de información
-uv run social-agent sources add "Rust Blog" rss "https://blog.rust-lang.org/feed" --priority 1
+social-agent sources add "Rust Blog" rss "https://blog.rust-lang.org/feed" --priority 1
 
 # Listar fuentes
-uv run social-agent sources list
+social-agent sources list
 
 # Listar seeds (ideas)
-uv run social-agent seeds list
+social-agent seeds list
 
 # Listar drafts por plataforma
-uv run social-agent drafts list --platform twitter
+social-agent drafts list --platform twitter
 
 # Aprobar y publicar un draft
-uv run social-agent drafts approve <draft_id>
-uv run social-agent drafts publish <draft_id>
+social-agent drafts approve <draft_id>
+social-agent drafts publish <draft_id>
 ```
+
+## Personalización
+
+Copia los ejemplos de `templates/` a `data/` y edítalos:
+
+```bash
+cp templates/prompts/interests.md data/prompts/
+cp -r templates/prompts/platforms data/prompts/
+```
+
+Luego ajusta `data/prompts/interests.md` con tus temas de interés y
+`data/prompts/platforms/*.md` con el tono y ejemplos para cada red.
 
 ## Estructura
 
@@ -59,12 +73,14 @@ uv run social-agent drafts publish <draft_id>
 social-agent/
 ├── backend/        → Python + FastAPI + CLI
 ├── frontend/       → TypeScript + Astro (en desarrollo)
-├── data/           → Persistencia en markdown
+├── data/           → Persistencia en markdown (generado en runtime, ignorado por git)
 │   ├── prompts/    → Intereses y prompts de plataforma
 │   ├── sources/    → Fuentes de información
 │   ├── seeds/      → Ideas generadas
 │   ├── drafts/     → Drafts de posts
 │   └── published/  → Posts publicados
+├── templates/      → Ejemplos de configuración (trackeados en git)
+│   └── prompts/    → interests.md, platforms/{twitter,linkedin}.md
 ├── tests/          → Tests unitarios
 └── AGENTS.md       → Plan del proyecto y fases
 ```
