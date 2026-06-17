@@ -148,6 +148,58 @@ DaisyUI ya cubre.
 - No añadir nuevas dependencias; solo refactorizar el marcado existente
 - Los tests del frontend (si los hay) deben seguir pasando
 
+## Fase 10 — Programación de publicaciones
+
+### Contexto
+
+Actualmente los publishers publican de forma inmediata al invocar el comando o endpoint correspondiente. No existe la posibilidad de programar una publicación para una fecha futura, algo esencial para la gestión de redes sociales.
+
+### Plan de implementación
+
+#### 10.1 Extender el modelo `Draft`
+
+- Añadir campo opcional `scheduled_at: datetime | None = None` a `Draft`
+- Incluirlo en `to_frontmatter()` y `from_frontmatter()` para persistencia
+- Al serializar a frontmatter, convertirlo a string ISO 8601
+- Al deserializar, parsear el string ISO 8601 con `datetime.fromisoformat()`
+
+#### 10.2 Añadir scheduler a la base de datos de drafts
+
+- En `MarkdownStore`, al guardar un draft con `scheduled_at` poblado, el draft se persiste con estado `draft` (no se publica aún)
+- Crear método `list_scheduled(since: datetime | None = None) -> list[Draft]` que devuelva drafts con `scheduled_at <= now` y `status == DraftStatus.DRAFT`
+
+#### 10.3 Crear comando CLI `schedule`
+
+- `social-agent schedule publish` — busca drafts con `scheduled_at <= now` y los publica
+- `social-agent schedule list` — lista drafts programados (futuros)
+- `social-agent schedule cancel <id>` — elimina el `scheduled_at` de un draft
+
+#### 10.4 Añadir endpoints API REST
+
+- `GET /api/drafts/scheduled` — lista drafts programados
+- `POST /api/drafts/{id}/schedule` — establece `scheduled_at` en el draft
+- `POST /api/scheduler/run` — ejecuta el scheduler (publica drafts pendientes)
+- `POST /api/drafts/{id}/unschedule` — elimina la programación
+
+#### 10.5 Crear worker de scheduler (background)
+
+- Implementar `backend/src/social_agent/scheduler.py` con un loop simple o usando `asyncio`
+- Configurar intervalo de verificación configurable (ej. cada 5 minutos)
+- Opcional: integrar con `APScheduler` o similar si se quiere persistencia de jobs
+
+#### 10.6 Actualizar frontend (Astro)
+
+- En vista de drafts, mostrar indicador visual cuando un draft está programado (icono de calendario + fecha)
+- Añadir campo de fecha/hora en el formulario de creación/edición de drafts
+- Añadir sección "Programados" en el dashboard
+
+#### 10.7 Tests
+
+- Tests unitarios para `scheduled_at` en Draft (serialización/deserialización)
+- Tests para `list_scheduled()` en MarkdownStore
+- Tests para los nuevos endpoints de scheduler
+- Tests del comando CLI `schedule`
+
 ---
 
 ### Notas técnicas
