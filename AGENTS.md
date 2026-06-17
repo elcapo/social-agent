@@ -104,8 +104,8 @@ social-agent/
 - [x] Tests de integración — 61 tests, todos pasan
 
 ### Fase 5 — Frontend Astro
-- [ ] Páginas básicas (dashboard, seeds, drafts)
-- [ ] Componentes
+- [x] Páginas básicas (dashboard, seeds, drafts)
+- [x] Componentes (Layout, Nav)
 
 ### Fase 6 — Publicadores y APIs sociales
 - [ ] Twitter publisher (API v2)

@@ -1,0 +1,206 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Nav from "../components/Nav.astro";
+---
+
+<Layout title="Sources">
+  <Nav />
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Sources</h1>
+      <button class="btn btn-primary" id="btn-add">Add source</button>
+    </div>
+
+    <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
+    <div id="sources-list"><p class="text-sm text-base-content/40">Loading...</p></div>
+  </main>
+
+  <dialog id="form-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg mb-4" id="form-title">Add Source</h3>
+      <div class="flex flex-col gap-3">
+        <label class="form-control w-full">
+          <span class="label-text">Name</span>
+          <input type="text" id="src-name" class="input input-bordered w-full" placeholder="My RSS feed" />
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text">Type</span>
+          <select id="src-type" class="select select-bordered w-full">
+            <option value="rss">RSS</option>
+            <option value="webpage">Webpage</option>
+            <option value="social">Social</option>
+            <option value="manual">Manual</option>
+          </select>
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text">URL</span>
+          <input type="url" id="src-url" class="input input-bordered w-full" placeholder="https://..." />
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text">Priority</span>
+          <select id="src-priority" class="select select-bordered w-full">
+            <option value="1">High (1)</option>
+            <option value="2" selected>Medium (2)</option>
+            <option value="3">Low (3)</option>
+          </select>
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text">Tags (comma-separated)</span>
+          <input type="text" id="src-tags" class="input input-bordered w-full" placeholder="tech, python" />
+        </label>
+      </div>
+      <div class="modal-action">
+        <button class="btn" id="modal-cancel">Cancel</button>
+        <button class="btn btn-primary" id="modal-save">Save</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <script>
+    const API = "http://localhost:8000/api";
+    let editId = null;
+
+    const errorEl = document.getElementById("error-msg");
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove("hidden");
+    }
+
+    function hideError() {
+      errorEl.classList.add("hidden");
+    }
+
+    async function getErrorMessage(res) {
+      try {
+        const body = await res.json();
+        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
+        return body.detail || "Request failed";
+      } catch { return "Request failed"; }
+    }
+
+    async function load() {
+      hideError();
+      const res = await fetch(`${API}/sources`);
+      const sources = await res.json();
+      const container = document.getElementById("sources-list");
+
+      if (!sources.length) {
+        container.innerHTML = '<p class="text-sm text-base-content/40">No sources configured. Add one to get started.</p>';
+        return;
+      }
+
+      container.innerHTML = `<div class="overflow-x-auto"><table class="table table-zinc">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>URL</th>
+            <th>Priority</th>
+            <th>Tags</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${sources.map(s => `
+          <tr>
+            <td class="font-medium">${esc(s.name)}</td>
+            <td><span class="badge badge-sm">${esc(s.source_type)}</span></td>
+            <td class="text-sm text-base-content/60 max-w-[220px] truncate">${esc(s.url)}</td>
+            <td><span class="badge badge-sm badge-ghost">${s.priority}</span></td>
+            <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-outline mr-1">${esc(t)}</span>`).join("")}</td>
+            <td><div class="flex gap-1"><button class="btn btn-ghost btn-xs" data-action="edit" data-id="${s.id}">Edit</button><button class="btn btn-ghost btn-xs text-error" data-action="delete" data-id="${s.id}">Delete</button></div></td>
+          </tr>`).join("")}</tbody>
+      </table></div>`;
+    }
+
+    function esc(str) {
+      if (!str) return "";
+      const d = document.createElement("div");
+      d.appendChild(document.createTextNode(str));
+      return d.innerHTML;
+    }
+
+    function openForm(source) {
+      editId = source ? source.id : null;
+      document.getElementById("form-title").textContent = source ? "Edit Source" : "Add Source";
+      document.getElementById("modal-save").textContent = source ? "Update" : "Save";
+      document.getElementById("src-name").value = source ? source.name : "";
+      document.getElementById("src-type").value = source ? source.source_type : "rss";
+      document.getElementById("src-url").value = source ? source.url : "";
+      document.getElementById("src-priority").value = source ? String(source.priority) : "2";
+      document.getElementById("src-tags").value = source ? (source.tags || []).join(", ") : "";
+      document.getElementById("form-modal").showModal();
+    }
+
+    document.getElementById("sources-list").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      hideError();
+      const id = btn.dataset.id;
+
+      if (btn.dataset.action === "delete") {
+        const res = await fetch(`${API}/sources/${id}`, { method: "DELETE" });
+        if (!res.ok) { showError("Failed to delete source"); return; }
+        load();
+      } else if (btn.dataset.action === "edit") {
+        const res = await fetch(`${API}/sources/${id}`);
+        if (!res.ok) { showError("Failed to load source"); return; }
+        openForm(await res.json());
+      }
+    });
+
+    document.getElementById("btn-add").addEventListener("click", () => {
+      hideError();
+      openForm(null);
+    });
+
+    document.getElementById("modal-cancel").addEventListener("click", () => {
+      document.getElementById("form-modal").close();
+    });
+
+    document.getElementById("modal-save").addEventListener("click", async () => {
+      const name = document.getElementById("src-name").value.trim();
+      const sourceType = document.getElementById("src-type").value;
+      const url = document.getElementById("src-url").value.trim();
+      const priority = parseInt(document.getElementById("src-priority").value);
+      const tagsStr = document.getElementById("src-tags").value.trim();
+
+      if (!name || !url) { showError("Name and URL are required."); return; }
+
+      const btn = document.getElementById("modal-save");
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Saving...";
+      hideError();
+
+      try {
+        const tagList = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
+
+        if (editId) {
+          const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
+          tagList.forEach(t => params.append("tags", t));
+          const res = await fetch(`${API}/sources/${editId}?${params}`, { method: "PATCH" });
+          if (!res.ok) throw new Error(await getErrorMessage(res));
+        } else {
+          const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
+          tagList.forEach(t => params.append("tags", t));
+          const res = await fetch(`${API}/sources?${params}`, { method: "POST" });
+          if (!res.ok) throw new Error(await getErrorMessage(res));
+        }
+
+        document.getElementById("form-modal").close();
+        editId = null;
+        ["src-name", "src-url", "src-tags"].forEach(id => document.getElementById(id).value = "");
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+
+    load();
+  </script>
+</Layout>

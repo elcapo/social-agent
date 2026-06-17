@@ -1,0 +1,103 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Nav from "../components/Nav.astro";
+---
+
+<Layout title="Dashboard">
+  <Nav />
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+
+    <div class="stats shadow w-full mb-8" id="stats">
+      <a href="/sources" class="stat no-underline hover:bg-base-200 transition-colors duration-150 cursor-pointer">
+        <div class="stat-title text-xs uppercase tracking-wider">Sources</div>
+        <div class="stat-value text-primary" id="stat-sources">—</div>
+      </a>
+      <a href="/seeds" class="stat no-underline hover:bg-base-200 transition-colors duration-150 cursor-pointer">
+        <div class="stat-title text-xs uppercase tracking-wider">Seeds</div>
+        <div class="stat-value text-primary" id="stat-seeds">—</div>
+      </a>
+      <a href="/drafts?status=draft" class="stat no-underline hover:bg-base-200 transition-colors duration-150 cursor-pointer">
+        <div class="stat-title text-xs uppercase tracking-wider">Pending</div>
+        <div class="stat-value text-primary" id="stat-drafts">—</div>
+      </a>
+      <a href="/drafts?status=published" class="stat no-underline hover:bg-base-200 transition-colors duration-150 cursor-pointer">
+        <div class="stat-title text-xs uppercase tracking-wider">Published</div>
+        <div class="stat-value text-primary" id="stat-published">—</div>
+      </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section class="card bg-base-100 border border-base-300 shadow-sm">
+        <div class="card-body p-5">
+          <h2 class="card-title text-sm uppercase tracking-wider text-base-content/60">Recent Seeds</h2>
+          <div id="recent-seeds"><p class="text-sm text-base-content/40">Loading...</p></div>
+        </div>
+      </section>
+      <section class="card bg-base-100 border border-base-300 shadow-sm">
+        <div class="card-body p-5">
+          <h2 class="card-title text-sm uppercase tracking-wider text-base-content/60">Recent Drafts</h2>
+          <div id="recent-drafts"><p class="text-sm text-base-content/40">Loading...</p></div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000/api";
+
+    async function load() {
+      const [sources, seeds, drafts] = await Promise.all([
+        fetch(`${API}/sources`).then(r => r.json()),
+        fetch(`${API}/seeds`).then(r => r.json()),
+        fetch(`${API}/drafts`).then(r => r.json()),
+      ]);
+
+      const published = drafts.filter(d => d.status === "published");
+      const pending = drafts.filter(d => d.status === "draft");
+
+      document.getElementById("stat-sources").textContent = sources.length;
+      document.getElementById("stat-seeds").textContent = seeds.length;
+      document.getElementById("stat-drafts").textContent = pending.length;
+      document.getElementById("stat-published").textContent = published.length;
+
+      const recentSeeds = seeds.slice(-5).reverse();
+      document.getElementById("recent-seeds").innerHTML =
+        recentSeeds.length
+          ? `<div class="divide-y divide-base-200">${recentSeeds.map(s => `
+            <a href="/seeds" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150">
+              <div class="min-w-0">
+                <div class="font-semibold text-sm truncate">${esc(s.title)}</div>
+                <div class="text-xs text-base-content/40">${s.created_at ? new Date(s.created_at).toLocaleDateString() : ""}</div>
+              </div>
+              <span class="badge badge-sm badge-soft ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span>
+            </a>`).join("")}</div>`
+          : '<p class="text-sm text-base-content/40 py-2">No seeds yet.</p>';
+
+      const recentDrafts = drafts.slice(-5).reverse();
+      document.getElementById("recent-drafts").innerHTML =
+        recentDrafts.length
+          ? `<div class="divide-y divide-base-200">${recentDrafts.map(d => {
+            const preview = d.content ? d.content.substring(0, 80) + (d.content.length > 80 ? "…" : "") : "(empty)";
+            return `
+            <a href="/drafts" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150">
+              <div class="min-w-0">
+                <div class="font-semibold text-sm truncate">${esc(preview)}</div>
+                <div class="text-xs text-base-content/40">${d.created_at ? new Date(d.created_at).toLocaleDateString() : ""}</div>
+              </div>
+              <span class="badge badge-sm badge-soft ${d.status === "draft" ? "badge-warning" : d.status === "approved" ? "badge-info" : d.status === "published" ? "badge-success" : "badge-error"}">${d.status}</span>
+            </a>`;
+          }).join("")}</div>`
+          : '<p class="text-sm text-base-content/40 py-2">No drafts yet.</p>';
+    }
+
+    function esc(str) {
+      if (!str) return "";
+      const d = document.createElement("div");
+      d.appendChild(document.createTextNode(str));
+      return d.innerHTML;
+    }
+
+    load();
+  </script>
+</Layout>

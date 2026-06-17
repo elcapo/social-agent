@@ -164,12 +164,12 @@ class TestSeedsAPI:
 
     def test_update_seed_status(self, client):
         seed = _create_test_seed(client)
-        resp = client.patch(f"/api/seeds/{seed['id']}", params={"status": "discarded"})
+        resp = client.patch(f"/api/seeds/{seed['id']}", json={"status": "discarded"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "discarded"
 
     def test_update_seed_not_found(self, client):
-        resp = client.patch("/api/seeds/nonexistent", params={"status": "discarded"})
+        resp = client.patch("/api/seeds/nonexistent", json={"status": "discarded"})
         assert resp.status_code == 404
 
 
@@ -243,14 +243,14 @@ class TestDraftsAPI:
 
     def test_update_draft_status(self, client):
         draft = _create_test_draft(client)
-        resp = client.patch(f"/api/drafts/{draft['id']}", params={"status": "approved"})
+        resp = client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "approved"
 
     def test_update_draft_content_resets_status(self, client):
         draft = _create_test_draft(client)
-        client.patch(f"/api/drafts/{draft['id']}", params={"status": "approved"})
-        resp = client.patch(f"/api/drafts/{draft['id']}", params={"content": "new content"})
+        client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
+        resp = client.patch(f"/api/drafts/{draft['id']}", json={"content": "new content"})
         assert resp.status_code == 200
         assert resp.json()["content"] == "new content"
         assert resp.json()["status"] == "draft"
@@ -262,7 +262,7 @@ class TestDraftsAPI:
 class TestPublishAPI:
     def test_publish_draft(self, client):
         draft = _create_test_draft(client)
-        client.patch(f"/api/drafts/{draft['id']}", params={"status": "approved"})
+        client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
         resp = client.post(f"/api/publish/{draft['id']}")
         assert resp.status_code == 200
         assert resp.json()["status"] == "published"

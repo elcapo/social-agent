@@ -35,6 +35,13 @@ class GenerateSeedsResponse(BaseModel):
     raw_response: str | None = None
 
 
+class UpdateSeedRequest(BaseModel):
+    status: Optional[str] = None
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
 def _build_collector(source: Source):
     match source.source_type:
         case SourceType.rss:
@@ -109,15 +116,19 @@ def generate_seeds(body: GenerateSeedsRequest) -> GenerateSeedsResponse:
 
 
 @router.patch("/seeds/{seed_id}")
-def update_seed(seed_id: str, status: Optional[str] = None, title: Optional[str] = None) -> Seed:
+def update_seed(seed_id: str, body: UpdateSeedRequest) -> Seed:
     seed = seed_store.get(seed_id)
     if not seed:
         raise HTTPException(404, f"Seed '{seed_id}' not found")
 
-    if status:
-        seed.status = SeedStatus(status)
-    if title:
-        seed.title = title
+    if body.status:
+        seed.status = SeedStatus(body.status)
+    if body.title is not None:
+        seed.title = body.title
+    if body.summary is not None:
+        seed.summary = body.summary
+    if body.tags is not None:
+        seed.tags = body.tags
 
     seed_store.save(seed)
     return seed

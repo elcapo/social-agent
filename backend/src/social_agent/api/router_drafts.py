@@ -31,6 +31,12 @@ class GenerateDraftsResponse(BaseModel):
     raw_responses: dict[str, str] | None = None
 
 
+class UpdateDraftRequest(BaseModel):
+    status: Optional[str] = None
+    content: Optional[str] = None
+    notes: Optional[str] = None
+
+
 @router.get("/drafts")
 def list_drafts(platform: Optional[str] = None, status: Optional[str] = None) -> list[Draft]:
     def _filter(d: Draft) -> bool:
@@ -107,24 +113,19 @@ def generate_drafts(body: GenerateDraftsRequest) -> GenerateDraftsResponse:
 
 
 @router.patch("/drafts/{draft_id}")
-def update_draft(
-    draft_id: str,
-    status: Optional[str] = None,
-    content: Optional[str] = None,
-    notes: Optional[str] = None,
-) -> Draft:
+def update_draft(draft_id: str, body: UpdateDraftRequest) -> Draft:
     draft = draft_store.get(draft_id)
     if not draft:
         raise HTTPException(404, f"Draft '{draft_id}' not found")
 
-    if status:
-        draft.status = DraftStatus(status)
-    if content is not None:
-        draft.content = content
+    if body.status:
+        draft.status = DraftStatus(body.status)
+    if body.content is not None:
+        draft.content = body.content
         if draft.status == DraftStatus.approved:
             draft.status = DraftStatus.draft
-    if notes is not None:
-        draft.notes = notes
+    if body.notes is not None:
+        draft.notes = body.notes
 
     draft_store.save(draft)
     return draft

@@ -1,0 +1,221 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Nav from "../components/Nav.astro";
+---
+
+<Layout title="Seeds">
+  <Nav />
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Seeds</h1>
+      <button class="btn btn-primary" id="btn-generate">Generate from sources</button>
+    </div>
+
+    <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
+    <div id="seeds-list"><p class="text-sm text-base-content/40">Loading...</p></div>
+  </main>
+
+  <dialog id="generate-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg mb-4">Generate Seeds</h3>
+      <label class="form-control w-full">
+        <span class="label-text">Interests</span>
+        <textarea id="interests" class="textarea textarea-bordered h-24 mt-1" rows="4">soberanía digital, ética digital, pedagogía digital</textarea>
+      </label>
+      <div class="modal-action">
+        <button class="btn" id="gen-cancel">Cancel</button>
+        <button class="btn btn-primary" id="gen-generate">Generate</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <dialog id="edit-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg mb-4">Edit Seed</h3>
+      <input type="hidden" id="edit-id" />
+      <label class="form-control w-full mb-3">
+        <span class="label-text">Title</span>
+        <input type="text" id="edit-title" class="input input-bordered w-full" />
+      </label>
+      <label class="form-control w-full mb-3">
+        <span class="label-text">Summary</span>
+        <textarea id="edit-summary" class="textarea textarea-bordered w-full" rows="3"></textarea>
+      </label>
+      <label class="form-control w-full mb-3">
+        <span class="label-text">Tags (comma-separated)</span>
+        <input type="text" id="edit-tags" class="input input-bordered w-full" placeholder="tech, python" />
+      </label>
+      <div class="modal-action">
+        <button class="btn" id="edit-cancel">Cancel</button>
+        <button class="btn btn-primary" id="edit-save">Save</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <script>
+    const API = "http://localhost:8000/api";
+
+    const errorEl = document.getElementById("error-msg");
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove("hidden");
+    }
+
+    function hideError() {
+      errorEl.classList.add("hidden");
+    }
+
+    async function getErrorMessage(res) {
+      try {
+        const body = await res.json();
+        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
+        return body.detail || "Request failed";
+      } catch { return "Request failed"; }
+    }
+
+    async function load() {
+      hideError();
+      const res = await fetch(`${API}/seeds`);
+      const seeds = await res.json();
+      const container = document.getElementById("seeds-list");
+
+      if (!seeds.length) {
+        container.innerHTML = '<p class="text-sm text-base-content/40">No seeds yet. Click "Generate from sources" to create some.</p>';
+        return;
+      }
+
+      container.innerHTML = `<div class="overflow-x-auto"><table class="table table-zinc">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Tags</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${seeds.map(s => `
+          <tr>
+            <td><div class="font-medium">${esc(s.title)}</div><div class="text-xs text-base-content/40">${esc(s.summary)}</div></td>
+            <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-outline mr-1">${esc(t)}</span>`).join("")}</td>
+            <td><span class="badge badge-sm badge-soft ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span></td>
+            <td class="text-sm text-base-content/40">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
+            <td>${s.status === "pending"
+              ? `<div class="flex gap-1"><button class="btn btn-ghost btn-xs" data-action="edit" data-id="${s.id}">Edit</button><button class="btn btn-ghost btn-xs text-error" data-action="discard" data-id="${s.id}">Discard</button></div>`
+              : `<span class="text-base-content/20">—</span>`}</td>
+          </tr>`).join("")}</tbody>
+      </table></div>`;
+    }
+
+    function esc(str) {
+      if (!str) return "";
+      const d = document.createElement("div");
+      d.appendChild(document.createTextNode(str));
+      return d.innerHTML;
+    }
+
+    document.getElementById("seeds-list").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      hideError();
+      const id = btn.dataset.id;
+
+      try {
+        if (btn.dataset.action === "discard") {
+          const res = await fetch(`${API}/seeds/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "discarded" }),
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res));
+          load();
+        } else if (btn.dataset.action === "edit") {
+          const res = await fetch(`${API}/seeds/${id}`);
+          if (!res.ok) throw new Error(await getErrorMessage(res));
+          const seed = await res.json();
+          document.getElementById("edit-id").value = seed.id;
+          document.getElementById("edit-title").value = seed.title;
+          document.getElementById("edit-summary").value = seed.summary;
+          document.getElementById("edit-tags").value = (seed.tags || []).join(", ");
+          document.getElementById("edit-modal").showModal();
+        }
+      } catch (e) {
+        showError("Error: " + e.message);
+      }
+    });
+
+    document.getElementById("edit-cancel").addEventListener("click", () => {
+      document.getElementById("edit-modal").close();
+    });
+
+    document.getElementById("edit-save").addEventListener("click", async () => {
+      const id = document.getElementById("edit-id").value;
+      const title = document.getElementById("edit-title").value.trim();
+      const summary = document.getElementById("edit-summary").value.trim();
+      const tagsStr = document.getElementById("edit-tags").value.trim();
+      if (!title) { showError("Title is required."); return; }
+
+      const btn = document.getElementById("edit-save");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+      hideError();
+
+      try {
+        const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
+        const res = await fetch(`${API}/seeds/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, summary, tags }),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        document.getElementById("edit-modal").close();
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save";
+      }
+    });
+
+    document.getElementById("btn-generate").addEventListener("click", () => {
+      hideError();
+      document.getElementById("generate-modal").showModal();
+    });
+
+    document.getElementById("gen-cancel").addEventListener("click", () => {
+      document.getElementById("generate-modal").close();
+    });
+
+    document.getElementById("gen-generate").addEventListener("click", async () => {
+      const interests = document.getElementById("interests").value;
+      if (!interests.trim()) { showError("Please enter interests."); return; }
+
+      const btn = document.getElementById("gen-generate");
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+      hideError();
+
+      try {
+        const res = await fetch(`${API}/seeds/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ interests }),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        document.getElementById("generate-modal").close();
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Generate";
+      }
+    });
+
+    load();
+  </script>
+</Layout>

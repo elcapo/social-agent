@@ -44,6 +44,37 @@ def get_source(source_id: str) -> Source:
     return source
 
 
+@router.patch("/sources/{source_id}")
+def update_source(
+    source_id: str,
+    name: Optional[str] = None,
+    source_type: Optional[SourceType] = None,
+    url: Optional[str] = None,
+    priority: Optional[SourcePriority] = None,
+    tags: Optional[list[str]] = None,
+    enabled: Optional[bool] = None,
+) -> Source:
+    source = source_store.get(source_id)
+    if not source:
+        raise HTTPException(404, f"Source '{source_id}' not found")
+
+    if name is not None:
+        source.name = name
+    if source_type is not None:
+        source.source_type = source_type
+    if url is not None:
+        source.url = url
+    if priority is not None:
+        source.priority = priority
+    if tags is not None:
+        source.tags = tags
+    if enabled is not None:
+        source.enabled = enabled
+
+    source_store.save(source)
+    return source
+
+
 @router.delete("/sources/{source_id}", status_code=204)
 def delete_source(source_id: str) -> None:
     if not source_store.delete(source_id):

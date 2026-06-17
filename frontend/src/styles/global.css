@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@layer base {
+  :root {
+    --color-primary: #7c3aed;
+    --color-secondary: #a78bfa;
+    --color-accent: #f97316;
+    --color-neutral: #1e1b4b;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+    --color-info: #3b82f6;
+    --rounded-box: 0.5rem;
+  }
+}
