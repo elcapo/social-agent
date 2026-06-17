@@ -23,3 +23,6 @@ uv.lock
 *.swo
 *~
 .DS_Store
+
+# Node.js
+frontend/node_modules/
