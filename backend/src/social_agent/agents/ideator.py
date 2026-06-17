@@ -71,6 +71,10 @@ Genera entre 3 y 5 ideas para posts basadas en el contenido anterior."""
 
 class IdeatorAgent(BaseAgent):
     system_prompt = SYSTEM_PROMPT
+    MAX_TOTAL_ITEMS = 50
+
+    def _sort_key(self, item: CollectedItem) -> str:
+        return item.published.isoformat() if item.published else ""
 
     def generate_seeds(
         self,
@@ -78,6 +82,9 @@ class IdeatorAgent(BaseAgent):
         collected_items: list[CollectedItem],
         dry_run: bool = False,
     ) -> list[Seed] | str:
+        items = sorted(collected_items, key=self._sort_key, reverse=True)
+        items = items[: self.MAX_TOTAL_ITEMS]
+
         def _format_item(idx: int, item: CollectedItem) -> str:
             return (
                 f"--- [{idx}] {item.title} ({item.source_name}) ---\n"
@@ -86,7 +93,7 @@ class IdeatorAgent(BaseAgent):
             )
 
         collected_text = "\n\n".join(
-            _format_item(i, item) for i, item in enumerate(collected_items, start=1)
+            _format_item(i, item) for i, item in enumerate(items, start=1)
         )
 
         user_prompt = USER_TEMPLATE.format(
@@ -108,8 +115,8 @@ class IdeatorAgent(BaseAgent):
             idx = entry.get("source_index")
             src_id: str | None = None
             src_url: str | None = None
-            if isinstance(idx, int) and 1 <= idx <= len(collected_items):
-                src = collected_items[idx - 1]
+            if isinstance(idx, int) and 1 <= idx <= len(items):
+                src = items[idx - 1]
                 src_id = src.source_id
                 src_url = src.url
 

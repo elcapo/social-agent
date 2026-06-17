@@ -12,6 +12,7 @@ from .base import BaseCollector, CollectedItem
 
 class RSSCollector(BaseCollector):
     source_type = "rss"
+    MAX_ITEMS = 20
 
     def fetch(self) -> list[CollectedItem]:
         parsed = feedparser.parse(self.url)
@@ -31,7 +32,12 @@ class RSSCollector(BaseCollector):
                 )
             )
 
-        return items
+        items.sort(key=_sort_key, reverse=True)
+        return items[: self.MAX_ITEMS]
+
+
+def _sort_key(item: CollectedItem) -> str:
+    return item.published.isoformat() if item.published else ""
 
 
 def _parse_date(entry: dict) -> Optional[datetime]:
