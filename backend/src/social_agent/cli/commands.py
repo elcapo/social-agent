@@ -6,6 +6,7 @@ import click
 import frontmatter
 
 from social_agent.agents.ideator import IdeatorAgent
+from social_agent.agents.writer import WriterAgent
 from social_agent.collectors import RSSCollector, WebScraperCollector
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
 from social_agent.config import settings
@@ -206,6 +207,75 @@ def seeds_discard(seed_id: str) -> None:
 @cli.group()
 def drafts() -> None:
     """Manage post drafts."""
+
+
+@drafts.command("generate")
+@click.argument("seed_id")
+@click.option("--platform", "-p", multiple=True, help="Target platform(s)")
+@click.option("--dry-run", is_flag=True, help="Show raw LLM response without saving")
+def drafts_generate(seed_id: str, platform: tuple[str, ...], dry_run: bool) -> None:
+    """Generate drafts from a seed for one or more platforms."""
+    seed = seed_store.get(seed_id)
+    if not seed:
+        click.echo(f"Seed '{seed_id}' not found.")
+        return
+
+    if seed.status != SeedStatus.pending:
+        click.echo(f"Seed '{seed_id}' is {seed.status.value}. Only pending seeds can be used.")
+        return
+
+    platforms_dir = settings.prompts_dir / "platforms"
+    if not platforms_dir.exists():
+        click.echo(f"No platform prompts found in {platforms_dir}")
+        return
+
+    available = sorted(p.stem for p in platforms_dir.glob("*.md"))
+    if not platform:
+        platform = tuple(available)
+
+    if not platform:
+        click.echo("No platforms available.")
+        return
+
+    writer = WriterAgent()
+    created = []
+
+    for p in platform:
+        if p not in available:
+            click.echo(f"Platform '{p}' not found in {platforms_dir}, skipping.")
+            continue
+
+        path = platforms_dir / f"{p}.md"
+        with open(path) as f:
+            post = frontmatter.load(f)
+
+        instructions = post.content.strip()
+        platform_name = post.metadata.get("title", p)
+        max_chars = post.metadata.get("max_chars", 0)
+
+        click.echo(f"Generating {p} draft...")
+        result = writer.generate_draft(
+            seed=seed,
+            platform=p,
+            platform_instructions=instructions,
+            platform_name=platform_name,
+            max_chars=max_chars,
+            dry_run=dry_run,
+        )
+
+        if dry_run:
+            click.echo(f"\n── {p} draft ──")
+            click.echo(str(result))
+            click.echo("─────" + "─" * len(p) + "──────")
+        else:
+            draft_store.save(result)
+            click.echo(f"  Created: {result.id}")
+            created.append(result)
+
+    if not dry_run:
+        seed.status = SeedStatus.used
+        seed_store.save(seed)
+        click.echo(f"\nDone. {len(created)} draft(s) generated from seed '{seed_id}'.")
 
 
 @drafts.command("list")
