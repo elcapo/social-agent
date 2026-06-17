@@ -9,7 +9,7 @@ from social_agent.models.draft import Draft
 from .base import BasePublisher, PublishResult
 
 LINKEDIN_API_BASE = "https://api.linkedin.com"
-LINKEDIN_VERSION = "202401"
+LINKEDIN_VERSION = "202606"
 
 
 class LinkedInPublisher(BasePublisher):
@@ -24,10 +24,9 @@ class LinkedInPublisher(BasePublisher):
             return self.author_urn
         headers = {
             "Authorization": f"Bearer {self.access_token}",
-            "LinkedIn-Version": LINKEDIN_VERSION,
         }
         resp = httpx.get(
-            f"{LINKEDIN_API_BASE}/rest/userinfo",
+            f"{LINKEDIN_API_BASE}/v2/userinfo",
             headers=headers,
         )
         resp.raise_for_status()
