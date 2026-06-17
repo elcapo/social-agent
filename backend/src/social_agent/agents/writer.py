@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.seed import Seed
 
@@ -12,7 +14,14 @@ Tu trabajo es transformar ideas (seeds) en posts listos para publicar en una pla
 Reglas:
 - Responde SOLO con el contenido del post, sin explicaciones ni markdown adicional.
 - Sigue al pie de la letra las instrucciones de tono y estilo de la plataforma.
-- No añadas hashtags a menos que la plataforma los requiera explícitamente."""
+- No añadas hashtags a menos que la plataforma los requiera explícitamente.
+- Encierra el post final entre las etiquetas <post> y </post>.
+  Todo lo que esté fuera de esas etiquetas será ignorado."""
+
+
+def _extract_post(text: str) -> str:
+    m = re.search(r"<post>\s*(.*?)\s*</post>", text, re.DOTALL)
+    return m.group(1) if m else text.strip()
 
 
 class WriterAgent(BaseAgent):
@@ -38,7 +47,8 @@ class WriterAgent(BaseAgent):
             f"{platform_instructions}\n\n"
             f"## Tarea\n\n"
             f"Genera un post para {platform_name or platform} basado en la idea anterior.\n"
-            f"Respeta el límite de caracteres. Responde SOLO con el contenido del post."
+            f"Respeta el límite de caracteres.\n"
+            f"Envuelve el post final entre <post> y </post>."
         )
 
         response = self.run(user_prompt, max_tokens=1024)
@@ -46,7 +56,7 @@ class WriterAgent(BaseAgent):
         if dry_run:
             return response
 
-        content = response.strip()
+        content = _extract_post(response)
         if max_chars and len(content) > max_chars:
             content = content[:max_chars].rsplit(" ", 1)[0]
 

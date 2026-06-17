@@ -139,8 +139,12 @@ def _build_collector(source: Source):
 
 @seeds.command("generate")
 @click.option("--interests", default=None, help="Path to interests prompt file")
+@click.option("--source-id", multiple=True, help="Filter by source ID(s) (may be repeated)")
+@click.option("--force", is_flag=True, help="Allow duplicate seeds for same URL")
 @click.option("--dry-run", is_flag=True, help="Show raw LLM response without saving seeds")
-def seeds_generate(interests: str | None, dry_run: bool) -> None:
+def seeds_generate(
+    interests: str | None, source_id: tuple[str, ...], force: bool, dry_run: bool,
+) -> None:
     """Generate seed ideas from sources + interests."""
     interests_path = Path(interests) if interests else settings.prompts_dir / "interests.md"
     if not interests_path.exists():
@@ -153,9 +157,24 @@ def seeds_generate(interests: str | None, dry_run: bool) -> None:
         interests_text = post.content.strip()
 
     sources = source_store.list(filter_fn=lambda s: s.enabled)
+    if source_id:
+        sources = [s for s in sources if s.id in source_id]
+        missing = [sid for sid in source_id if sid not in {s.id for s in sources}]
+        if missing:
+            click.echo(f"Source(s) not found or not enabled: {', '.join(missing)}")
+            return
+
     if not sources:
         click.echo("No enabled sources found. Add one first: social-agent sources add ...")
         return
+
+    existing_urls: set[str] = set()
+    if not force:
+        existing = seed_store.list()
+        existing_urls = {
+            s.source_url for s in existing
+            if s.source_url and s.status == SeedStatus.pending
+        }
 
     all_items = []
     for src in sources:
@@ -185,11 +204,16 @@ def seeds_generate(interests: str | None, dry_run: bool) -> None:
         click.echo("─────────────────────")
         return
 
+    skipped = 0
     for seed in result:
+        if not force and seed.source_url and seed.source_url in existing_urls:
+            click.echo(f"  Skipped (duplicate URL): {seed.title}")
+            skipped += 1
+            continue
         seed_store.save(seed)
         click.echo(f"  Created: {seed.id} - {seed.title}")
 
-    click.echo(f"\nDone. {len(result)} seeds generated.")
+    click.echo(f"\nDone. {len(result) - skipped} seeds generated ({skipped} duplicates skipped).")
 
 
 @seeds.command("list")

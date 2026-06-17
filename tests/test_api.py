@@ -186,6 +186,65 @@ class TestSeedsAPI:
         resp = client.patch("/api/seeds/nonexistent", json={"status": "discarded"})
         assert resp.status_code == 404
 
+    def test_update_seed_source_url(self, client):
+        seed = _create_test_seed(client)
+        resp = client.patch(f"/api/seeds/{seed['id']}", json={
+            "source_url": "https://example.com/updated",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["source_url"] == "https://example.com/updated"
+
+    def test_generate_seeds_skips_duplicate_url(self, client, tmp_path):
+        """Generar dos veces seguidas debe saltar seeds con URL duplicada."""
+        _create_test_source(client)
+
+        patch_fetch = patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        )
+        patch_ideator = patch(
+            "social_agent.agents.ideator.IdeatorAgent.run",
+            return_value=MOCK_SEEDS_JSON,
+        )
+        with patch_fetch, patch_ideator:
+            resp1 = client.post("/api/seeds/generate", json={"interests": "tech"})
+        assert resp1.status_code == 201
+        assert resp1.json()["skipped"] == 0
+
+        with patch_fetch, patch_ideator:
+            resp2 = client.post("/api/seeds/generate", json={"interests": "tech"})
+        assert resp2.status_code == 201
+        assert resp2.json()["skipped"] == 1
+        # Total seeds in store should be 3 (2 from first call + 1 new from second,
+        # the duplicate with source_url was skipped)
+        all_seeds = client.get("/api/seeds").json()
+        assert len(all_seeds) == 3
+
+    def test_generate_seeds_force_overrides_dedup(self, client, tmp_path):
+        """Con force=True se permiten duplicados."""
+        _create_test_source(client)
+
+        patch_fetch = patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        )
+        patch_ideator = patch(
+            "social_agent.agents.ideator.IdeatorAgent.run",
+            return_value=MOCK_SEEDS_JSON,
+        )
+        with patch_fetch, patch_ideator:
+            client.post("/api/seeds/generate", json={"interests": "tech"})
+
+        with patch_fetch, patch_ideator:
+            resp = client.post("/api/seeds/generate", json={
+                "interests": "tech",
+                "force": True,
+            })
+        assert resp.status_code == 201
+        assert resp.json()["skipped"] == 0
+        assert len(resp.json()["seeds"]) == 2
+        assert resp.json()["seeds"][0]["source_url"] == "https://example.com/a"
+
 
 # ── Drafts ──
 

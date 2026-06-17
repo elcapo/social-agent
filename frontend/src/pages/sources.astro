@@ -17,38 +17,28 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="form-modal" class="modal">
     <div class="modal-box">
-      <h3 class="font-bold text-lg mb-4" id="form-title">Add Source</h3>
-      <div class="flex flex-col gap-3">
-        <label class="form-control w-full">
-          <span class="label-text">Name</span>
-          <input type="text" id="src-name" class="input input-bordered w-full" placeholder="My RSS feed" />
-        </label>
-        <label class="form-control w-full">
-          <span class="label-text">Type</span>
-          <select id="src-type" class="select select-bordered w-full">
-            <option value="rss">RSS</option>
-            <option value="webpage">Webpage</option>
-            <option value="social">Social</option>
-            <option value="manual">Manual</option>
-          </select>
-        </label>
-        <label class="form-control w-full">
-          <span class="label-text">URL</span>
-          <input type="url" id="src-url" class="input input-bordered w-full" placeholder="https://..." />
-        </label>
-        <label class="form-control w-full">
-          <span class="label-text">Priority</span>
-          <select id="src-priority" class="select select-bordered w-full">
-            <option value="1">High (1)</option>
-            <option value="2" selected>Medium (2)</option>
-            <option value="3">Low (3)</option>
-          </select>
-        </label>
-        <label class="form-control w-full">
-          <span class="label-text">Tags (comma-separated)</span>
-          <input type="text" id="src-tags" class="input input-bordered w-full" placeholder="tech, python" />
-        </label>
-      </div>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold" id="form-title">Add Source</legend>
+        <label class="label">Name</label>
+        <input type="text" id="src-name" class="input w-full" placeholder="My RSS feed" />
+        <label class="label">Type</label>
+        <select id="src-type" class="select w-full">
+          <option value="rss">RSS</option>
+          <option value="webpage">Webpage</option>
+          <option value="social">Social</option>
+          <option value="manual">Manual</option>
+        </select>
+        <label class="label">URL</label>
+        <input type="url" id="src-url" class="input w-full" placeholder="https://..." />
+        <label class="label">Priority</label>
+        <select id="src-priority" class="select w-full">
+          <option value="1">High (1)</option>
+          <option value="2" selected>Medium (2)</option>
+          <option value="3">Low (3)</option>
+        </select>
+        <label class="label">Tags (comma-separated)</label>
+        <input type="text" id="src-tags" class="input w-full" placeholder="tech, python" />
+      </fieldset>
       <div class="modal-action">
         <button class="btn" id="modal-cancel">Cancel</button>
         <button class="btn btn-primary" id="modal-save">Save</button>

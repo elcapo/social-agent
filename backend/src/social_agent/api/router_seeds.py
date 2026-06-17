@@ -26,12 +26,14 @@ router = APIRouter(tags=["seeds"])
 class GenerateSeedsRequest(BaseModel):
     interests: str
     source_ids: Optional[list[str]] = None
+    force: bool = False
     dry_run: bool = False
 
 
 class GenerateSeedsResponse(BaseModel):
     seeds: list[Seed] | None = None
     raw_response: str | None = None
+    skipped: int = 0
 
 
 class UpdateSeedRequest(BaseModel):
@@ -39,6 +41,7 @@ class UpdateSeedRequest(BaseModel):
     title: Optional[str] = None
     summary: Optional[str] = None
     tags: Optional[list[str]] = None
+    source_url: Optional[str] = None
 
 
 def _build_collector(source: Source):
@@ -108,10 +111,22 @@ def generate_seeds(body: GenerateSeedsRequest) -> GenerateSeedsResponse:
     if body.dry_run:
         return GenerateSeedsResponse(raw_response=str(result))
 
+    existing_urls: set[str] = set()
+    if not body.force:
+        existing = seed_store.list()
+        existing_urls = {
+            s.source_url for s in existing
+            if s.source_url and s.status == SeedStatus.pending
+        }
+
+    skipped = 0
     for seed in result:
+        if not body.force and seed.source_url and seed.source_url in existing_urls:
+            skipped += 1
+            continue
         seed_store.save(seed)
 
-    return GenerateSeedsResponse(seeds=result)
+    return GenerateSeedsResponse(seeds=result, skipped=skipped)
 
 
 @router.patch("/seeds/{seed_id}")
@@ -128,6 +143,8 @@ def update_seed(seed_id: str, body: UpdateSeedRequest) -> Seed:
         seed.summary = body.summary
     if body.tags is not None:
         seed.tags = body.tags
+    if body.source_url is not None:
+        seed.source_url = body.source_url
 
     seed_store.save(seed)
     return seed

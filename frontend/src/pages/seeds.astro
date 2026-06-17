@@ -17,11 +17,11 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="generate-modal" class="modal">
     <div class="modal-box">
-      <h3 class="font-bold text-lg mb-4">Generate Seeds</h3>
-      <label class="form-control w-full">
-        <span class="label-text">Interests</span>
-        <textarea id="interests" class="textarea textarea-bordered h-24 mt-1" rows="4">soberanía digital, ética digital, pedagogía digital</textarea>
-      </label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold">Generate Seeds</legend>
+        <label class="label">Interests</label>
+        <textarea id="interests" class="textarea w-full" rows="4">soberanía digital, ética digital, pedagogía digital</textarea>
+      </fieldset>
       <div class="modal-action">
         <button class="btn" id="gen-cancel">Cancel</button>
         <button class="btn btn-primary" id="gen-generate">Generate</button>
@@ -32,20 +32,18 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="edit-modal" class="modal">
     <div class="modal-box">
-      <h3 class="font-bold text-lg mb-4">Edit Seed</h3>
       <input type="hidden" id="edit-id" />
-      <label class="form-control w-full mb-3">
-        <span class="label-text">Title</span>
-        <input type="text" id="edit-title" class="input input-bordered w-full" />
-      </label>
-      <label class="form-control w-full mb-3">
-        <span class="label-text">Summary</span>
-        <textarea id="edit-summary" class="textarea textarea-bordered w-full" rows="3"></textarea>
-      </label>
-      <label class="form-control w-full mb-3">
-        <span class="label-text">Tags (comma-separated)</span>
-        <input type="text" id="edit-tags" class="input input-bordered w-full" placeholder="tech, python" />
-      </label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold">Edit Seed</legend>
+        <label class="label">Title</label>
+        <input type="text" id="edit-title" class="input w-full" />
+        <label class="label">Summary</label>
+        <textarea id="edit-summary" class="textarea w-full" rows="8"></textarea>
+        <label class="label">Source URL</label>
+        <input type="text" id="edit-source-url" class="input w-full" placeholder="https://..." />
+        <label class="label">Tags (comma-separated)</label>
+        <input type="text" id="edit-tags" class="input w-full" placeholder="tech, python" />
+      </fieldset>
       <div class="modal-action">
         <button class="btn" id="edit-cancel">Cancel</button>
         <button class="btn btn-primary" id="edit-save">Save</button>
@@ -91,6 +89,7 @@ import Nav from "../components/Nav.astro";
         <thead>
           <tr>
             <th>Title</th>
+            <th>Source</th>
             <th>Tags</th>
             <th>Status</th>
             <th>Created</th>
@@ -100,6 +99,7 @@ import Nav from "../components/Nav.astro";
         <tbody>${seeds.map(s => `
           <tr>
             <td><div class="font-medium">${esc(s.title)}</div><div class="text-xs text-base-content/40">${esc(s.summary)}</div></td>
+            <td><span class="text-xs text-base-content/50 max-w-[120px] inline-block truncate" title="${esc(s.source_url || "")}">${s.source_url ? esc(s.source_url.replace(/^https?:\/\//, "")) : "—"}</span></td>
             <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-outline mr-1">${esc(t)}</span>`).join("")}</td>
             <td><span class="badge badge-sm badge-soft ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span></td>
             <td class="text-sm text-base-content/40">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
@@ -139,6 +139,7 @@ import Nav from "../components/Nav.astro";
           document.getElementById("edit-id").value = seed.id;
           document.getElementById("edit-title").value = seed.title;
           document.getElementById("edit-summary").value = seed.summary;
+          document.getElementById("edit-source-url").value = seed.source_url || "";
           document.getElementById("edit-tags").value = (seed.tags || []).join(", ");
           document.getElementById("edit-modal").showModal();
         }
@@ -155,6 +156,7 @@ import Nav from "../components/Nav.astro";
       const id = document.getElementById("edit-id").value;
       const title = document.getElementById("edit-title").value.trim();
       const summary = document.getElementById("edit-summary").value.trim();
+      const sourceUrl = document.getElementById("edit-source-url").value.trim();
       const tagsStr = document.getElementById("edit-tags").value.trim();
       if (!title) { showError("Title is required."); return; }
 
@@ -165,10 +167,12 @@ import Nav from "../components/Nav.astro";
 
       try {
         const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
+        const body = { title, summary, tags };
+        if (sourceUrl) body.source_url = sourceUrl;
         const res = await fetch(`${API}/seeds/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, summary, tags }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await getErrorMessage(res));
         document.getElementById("edit-modal").close();

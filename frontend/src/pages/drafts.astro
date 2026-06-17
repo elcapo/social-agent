@@ -17,15 +17,13 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="generate-modal" class="modal">
     <div class="modal-box">
-      <h3 class="font-bold text-lg mb-4">Generate Drafts</h3>
-      <label class="form-control w-full mb-3">
-        <span class="label-text">Seed</span>
-        <select id="seed-select" class="select select-bordered w-full">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold">Generate Drafts</legend>
+        <label class="label">Seed</label>
+        <select id="seed-select" class="select w-full">
           <option value="">Loading seeds...</option>
         </select>
-      </label>
-      <fieldset class="mb-4">
-        <legend class="label-text mb-2">Platforms</legend>
+        <label class="label">Platforms</label>
         <label class="label cursor-pointer justify-start gap-3">
           <input type="checkbox" value="twitter" checked class="checkbox checkbox-primary" />
           <span class="label-text">Twitter / X</span>
@@ -56,12 +54,12 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="edit-modal" class="modal">
     <div class="modal-box">
-      <h3 class="font-bold text-lg mb-4">Edit Draft</h3>
       <input type="hidden" id="edit-id" />
-      <label class="form-control w-full">
-        <span class="label-text">Content</span>
-        <textarea id="edit-content" class="textarea textarea-bordered w-full h-48 mt-1"></textarea>
-      </label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold">Edit Draft</legend>
+        <label class="label">Content</label>
+        <textarea id="edit-content" class="textarea w-full h-48"></textarea>
+      </fieldset>
       <div class="modal-action">
         <button class="btn" id="edit-cancel">Cancel</button>
         <button class="btn btn-primary" id="edit-save">Save</button>
@@ -72,10 +70,10 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="prompt-dialog" class="modal">
     <div class="modal-box">
-      <label class="form-control w-full">
-        <span class="label-text" id="prompt-msg">Reason:</span>
-        <input type="text" id="prompt-input" class="input input-bordered w-full mt-1" />
-      </label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold" id="prompt-msg">Reason:</legend>
+        <input type="text" id="prompt-input" class="input w-full" />
+      </fieldset>
       <div class="modal-action">
         <button class="btn" id="prompt-cancel">Cancel</button>
         <button class="btn btn-primary" id="prompt-ok">OK</button>
