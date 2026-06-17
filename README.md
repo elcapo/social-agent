@@ -256,3 +256,61 @@ social-agent/
 ```
 
 Ver `AGENTS.md` para el detalle completo del plan y el workflow del proyecto.
+
+## API REST
+
+La API está documentada automáticamente con OpenAPI:
+
+- **Swagger UI**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Redoc**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### Endpoints
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check |
+| `GET` | `/api/sources` | Listar fuentes (filtro opcional `?source_type=rss`) |
+| `POST` | `/api/sources` | Crear fuente |
+| `GET` | `/api/sources/{id}` | Obtener fuente |
+| `PATCH` | `/api/sources/{id}` | Actualizar fuente |
+| `DELETE` | `/api/sources/{id}` | Eliminar fuente |
+| `GET` | `/api/seeds` | Listar semillas (filtro opcional `?status=pending`) |
+| `GET` | `/api/seeds/{id}` | Obtener semilla |
+| `POST` | `/api/seeds/generate` | Generar semillas desde fuentes |
+| `PATCH` | `/api/seeds/{id}` | Actualizar semilla |
+| `GET` | `/api/drafts` | Listar borradores (`?platform=twitter&status=approved`) |
+| `GET` | `/api/drafts/{id}` | Obtener borrador |
+| `POST` | `/api/drafts/generate` | Generar borradores desde una semilla |
+| `PATCH` | `/api/drafts/{id}` | Actualizar borrador (estado, contenido, notas) |
+| `POST` | `/api/publish/{id}` | Publicar borrador aprobado en la red social |
+
+### Ejemplos con curl
+
+```bash
+# Health
+curl http://localhost:8000/api/health
+
+# Crear fuente RSS
+curl -X POST "http://localhost:8000/api/sources?name=Rust+Blog&source_type=rss&url=https://blog.rust-lang.org/feed"
+
+# Listar fuentes
+curl http://localhost:8000/api/sources
+
+# Generar semillas
+curl -X POST http://localhost:8000/api/seeds/generate \
+  -H "Content-Type: application/json" \
+  -d '{"interests": "rust, systems programming"}'
+
+# Generar drafts (requiere semilla existente)
+curl -X POST http://localhost:8000/api/drafts/generate \
+  -H "Content-Type: application/json" \
+  -d '{"seed_id": "seed_123", "platforms": ["twitter", "linkedin"]}'
+
+# Aprobar draft
+curl -X PATCH http://localhost:8000/api/drafts/draft_123 \
+  -H "Content-Type: application/json" \
+  -d '{"status": "approved"}'
+
+# Publicar (requiere credenciales configuradas)
+curl -X POST http://localhost:8000/api/publish/draft_123
+```

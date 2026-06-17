@@ -140,3 +140,64 @@ class TestLinkedInCollector:
             items = c.fetch()
 
         assert items == []
+
+    def test_fetch_empty_elements(self):
+        c = LinkedInCollector("s1", "Test", "https://linkedin.com/in/user", access_token="tok")
+        c.author_urn = "urn:li:person:abc"
+
+        mock_resp = MagicMock(
+            status_code=200,
+            json=lambda: {"elements": []},
+        )
+
+        with patch("social_agent.collectors.social.httpx.get", return_value=mock_resp):
+            items = c.fetch()
+
+        assert items == []
+
+    def test_fetch_no_commentary(self):
+        c = LinkedInCollector("s1", "Test", "https://linkedin.com/in/user", access_token="tok")
+        c.author_urn = "urn:li:person:abc"
+
+        mock_resp = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "elements": [
+                    {"id": "post1"},
+                    {"id": "post2", "commentary": ""},
+                ]
+            },
+        )
+
+        with patch("social_agent.collectors.social.httpx.get", return_value=mock_resp):
+            items = c.fetch()
+
+        assert len(items) == 2
+        assert items[0].title == "(no text)"
+        assert items[1].title == "(no text)"
+
+
+class TestLinkedInCollectorFetchWithoutUrn:
+    def test_fetch_resolves_urn_and_gets_posts(self):
+        c = LinkedInCollector("s1", "Test", "https://linkedin.com/in/user", access_token="tok")
+
+        mock_userinfo = MagicMock(
+            status_code=200,
+            json=lambda: {"sub": "member_123"},
+        )
+        mock_posts = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "elements": [
+                    {"id": "p1", "commentary": "Post text"},
+                ]
+            },
+        )
+
+        with patch("social_agent.collectors.social.httpx.get") as mock_get:
+            mock_get.side_effect = [mock_userinfo, mock_posts]
+            items = c.fetch()
+
+        assert len(items) == 1
+        assert items[0].content == "Post text"
+        assert c.author_urn == "urn:li:person:member_123"

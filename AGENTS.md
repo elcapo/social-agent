@@ -31,6 +31,11 @@ social-agent/
 │       │   ├── base.py
 │       │   ├── ideator.py
 │       │   └── writer.py
+│       ├── publishers/
+│       │   ├── __init__.py
+│       │   ├── base.py
+│       │   ├── twitter.py
+│       │   └── linkedin.py
 │       ├── collectors/
 │       │   ├── __init__.py
 │       │   ├── base.py
@@ -71,7 +76,12 @@ social-agent/
 ├── tests/
 │   ├── __init__.py
 │   ├── test_models.py
-│   └── test_markdown_store.py
+│   ├── test_markdown_store.py
+│   ├── test_collectors.py
+│   ├── test_api.py
+│   ├── test_ideator.py
+│   ├── test_writer.py
+│   └── test_publishers.py
 ├── pyproject.toml
 └── AGENTS.md
 ```
@@ -108,14 +118,15 @@ social-agent/
 - [x] Componentes (Layout, Nav)
 
 ### Fase 6 — Publicadores y APIs sociales
-- [ ] Twitter publisher (API v2)
-- [ ] LinkedIn publisher (API)
-- [ ] Social collectors
+- [x] Twitter publisher (API v2 con Tweepy)
+- [x] LinkedIn publisher (API Posts con httpx)
+- [x] Social collectors (TwitterCollector funcional, LinkedInCollector implementado)
+- [x] Tests — 81 tests, todos pasan
 
 ### Fase 7 — Extensibilidad, pulido, docs
-- [ ] Documentación de API
-- [ ] Guía para añadir plataformas
-- [ ] Tests finales
+- [x] Documentación de API
+- [x] Guía para añadir plataformas
+- [x] Tests finales
 
 ## Workflow
 
