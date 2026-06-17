@@ -9,6 +9,7 @@ feedparser
 beautifulsoup4
 litellm
 python-frontmatter
+tweepy>=4.16
 
 [dev]
 pytest>=8.0

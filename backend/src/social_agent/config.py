@@ -14,7 +14,14 @@ class Settings(BaseSettings):
     llm_base_url: Optional[str] = None
 
     twitter_bearer_token: Optional[str] = None
+    twitter_api_key: Optional[str] = None
+    twitter_api_secret: Optional[str] = None
+    twitter_access_token: Optional[str] = None
+    twitter_access_token_secret: Optional[str] = None
+    linkedin_client_id: Optional[str] = None
+    linkedin_client_secret: Optional[str] = None
     linkedin_access_token: Optional[str] = None
+    linkedin_author_urn: Optional[str] = None
 
     data_dir: Path = Path("data")
     prompts_dir: Path = Path("data/prompts")

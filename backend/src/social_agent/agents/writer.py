@@ -5,7 +5,6 @@ from social_agent.models.seed import Seed
 
 from .base import BaseAgent
 
-
 SYSTEM_PROMPT = """Eres un writer de contenido para redes sociales.
 
 Tu trabajo es transformar ideas (seeds) en posts listos para publicar en una plataforma específica.

@@ -30,6 +30,42 @@ def cli() -> None:
     """social-agent: Sistema de agentes para redes sociales."""
 
 
+# ── LinkedIn Auth ──
+
+
+@cli.group()
+def linkedin() -> None:
+    """LinkedIn authentication and tools."""
+
+
+@linkedin.command("auth")
+@click.option("--save", is_flag=True, help="Save token to .env file")
+@click.option("--env-file", default=".env", help="Path to .env file (default: .env)")
+@click.option("--port", default=8080, type=int,
+              help="Port for OAuth callback server (default: 8080)")
+def linkedin_auth(save: bool, env_file: str, port: int) -> None:
+    """Authorize with LinkedIn and get an access token."""
+    import asyncio
+
+    if not settings.linkedin_client_id or not settings.linkedin_client_secret:
+        click.echo(
+            "LinkedIn client ID and secret not configured.\n"
+            "Set SOCIAL_AGENT_LINKEDIN_CLIENT_ID and "
+            "SOCIAL_AGENT_LINKEDIN_CLIENT_SECRET in .env"
+        )
+        return
+
+    from .linkedin_auth import auth_flow
+
+    asyncio.run(auth_flow(
+        client_id=settings.linkedin_client_id,
+        client_secret=settings.linkedin_client_secret,
+        port=port,
+        save=save,
+        env_file=env_file,
+    ))
+
+
 # ── Sources ──
 
 
@@ -361,8 +397,9 @@ def drafts_edit(draft_id: str, new_content: str) -> None:
 @drafts.command("publish")
 @click.argument("draft_id")
 def drafts_publish(draft_id: str) -> None:
-    """Mark a draft as published."""
-    from datetime import datetime, timezone
+    """Publish a draft to its social media platform."""
+    from social_agent.publishers.linkedin import LinkedInPublisher
+    from social_agent.publishers.twitter import TwitterPublisher
 
     draft = draft_store.get(draft_id)
     if not draft:
@@ -371,10 +408,55 @@ def drafts_publish(draft_id: str) -> None:
     if draft.status != DraftStatus.approved:
         click.echo("Only approved drafts can be published. Use 'approve' first.")
         return
-    draft.status = DraftStatus.published
-    draft.published_at = datetime.now(timezone.utc)
-    draft_store.save(draft)
-    click.echo(f"Draft '{draft_id}' published.")
+
+    if draft.platform == "twitter":
+        if not all([
+            settings.twitter_api_key,
+            settings.twitter_api_secret,
+            settings.twitter_access_token,
+            settings.twitter_access_token_secret,
+        ]):
+            click.echo("Twitter credentials not configured. Set SOCIAL_AGENT_TWITTER_API_KEY, etc.")
+            return
+        publisher = TwitterPublisher(
+            consumer_key=settings.twitter_api_key,
+            consumer_secret=settings.twitter_api_secret,
+            access_token=settings.twitter_access_token,
+            access_token_secret=settings.twitter_access_token_secret,
+        )
+    elif draft.platform == "linkedin":
+        if not settings.linkedin_access_token:
+            click.echo(
+                "LinkedIn access token not configured. "
+                "Set SOCIAL_AGENT_LINKEDIN_ACCESS_TOKEN"
+            )
+            return
+        publisher = LinkedInPublisher(
+            access_token=settings.linkedin_access_token,
+            author_urn=settings.linkedin_author_urn,
+        )
+    else:
+        click.echo(f"Unknown platform '{draft.platform}'.")
+        return
+
+    draft.publish_attempts += 1
+    result = publisher.publish(draft)
+
+    if result.success:
+        draft.status = DraftStatus.published
+        draft.platform_post_id = result.platform_post_id
+        draft.published_at = result.published_at
+        draft.publish_error = None
+        draft_store.save(draft)
+        click.echo(
+            f"Draft '{draft_id}' published to {draft.platform} "
+            f"(id: {result.platform_post_id})."
+        )
+    else:
+        draft.status = DraftStatus.failed
+        draft.publish_error = result.error
+        draft_store.save(draft)
+        click.echo(f"Failed to publish draft '{draft_id}': {result.error}")
 
 
 if __name__ == "__main__":

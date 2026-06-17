@@ -69,30 +69,56 @@ También puedes usar cualquier otro proveedor directamente:
 
 ### APIs de redes sociales
 
-Los colectores sociales requieren credenciales de la API correspondiente.
+Los colectores y publicadores requieren credenciales de la API correspondiente.
 
 #### Twitter / X (API v2)
 
 1. Ve a [developer.twitter.com](https://developer.twitter.com) y crea un proyecto.
-2. Genera un *Bearer Token* en la sección "Keys and Tokens".
-3. Añádelo al `.env`:
+2. Para el **colector** (lectura): genera un *Bearer Token* en "Keys and Tokens".
+3. Para el **publicador** (escritura): genera credenciales OAuth 1.0a User Context
+   con permisos de escritura en "Keys and Tokens" → "Access Token and Secret".
+4. Añádelas al `.env`:
 
 ```env
+# Colector (lectura)
 SOCIAL_AGENT_TWITTER_BEARER_TOKEN=AAAAAAAAAAAAAAAAAAAA...
+
+# Publicador (escritura)
+SOCIAL_AGENT_TWITTER_API_KEY=xxxxxxxxx
+SOCIAL_AGENT_TWITTER_API_SECRET=xxxxxxxxx
+SOCIAL_AGENT_TWITTER_ACCESS_TOKEN=xxxxxxxxx
+SOCIAL_AGENT_TWITTER_ACCESS_TOKEN_SECRET=xxxxxxxxx
 ```
 
 #### LinkedIn
 
 1. Ve a [developer.linkedin.com](https://developer.linkedin.com) y crea una app.
-2. Solicita los scopes `w_member_social` y `r_liteprofile`.
-3. Genera un *Access Token* y añádelo al `.env`:
+2. Configura el redirect URI como `http://localhost:8080/callback`.
+3. Añade el Client ID y Client Secret al `.env`:
 
 ```env
-SOCIAL_AGENT_LINKEDIN_ACCESS_TOKEN=AQW...
+SOCIAL_AGENT_LINKEDIN_CLIENT_ID=xxxxxxxxx
+SOCIAL_AGENT_LINKEDIN_CLIENT_SECRET=xxxxxxxxx
 ```
 
-Sin estas credenciales los colectores sociales devuelven lista vacía.
-Las fuentes RSS y web scraping no requieren autenticación.
+4. Genera el token de acceso automáticamente:
+
+```bash
+social-agent linkedin auth --save
+```
+
+Esto abrirá el navegador para autorizar la app y guardará el token en `.env`.
+Scopes solicitados: `openid`, `profile`, `w_member_social`.
+
+Opcionalmente puedes predefinir el author URN (se resuelve automáticamente si se omite):
+
+```env
+SOCIAL_AGENT_LINKEDIN_AUTHOR_URN=urn:li:person:xxx
+```
+
+Sin estas credenciales los colectores sociales devuelven lista vacía y los
+publicadores informan del error. Las fuentes RSS y web scraping no requieren
+autenticación.
 
 ## Servidores
 
@@ -187,8 +213,16 @@ social-agent drafts reject <draft_id> --notes "muy técnico"
 # Editar un borrador
 social-agent drafts edit <draft_id> "nuevo contenido"
 
-# Marcar un borrador como publicado
+# Publicar en la red social real (requiere credenciales configuradas)
 social-agent drafts publish <draft_id>
+```
+
+Los borradores pueden tener estos estados:
+`draft` → `approved` → `published` (éxito) / `failed` (error de API).
+Usa `show` para inspeccionar `publish_error` en borradores fallidos:
+
+```bash
+social-agent drafts show <draft_id>
 ```
 
 ## Personalización
@@ -207,7 +241,7 @@ Luego ajusta `data/prompts/interests.md` con tus temas de interés y
 
 ```
 social-agent/
-├── backend/        → Python + FastAPI + CLI
+├── backend/        → Python + FastAPI + CLI + publicadores
 ├── frontend/       → TypeScript + Astro (en desarrollo)
 ├── data/           → Persistencia en markdown (generado en runtime, ignorado por git)
 │   ├── prompts/    → Intereses y prompts de plataforma

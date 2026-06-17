@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from social_agent.collectors.base import CollectedItem
+from social_agent.config import settings as global_settings
 from social_agent.main import app
 from social_agent.models.draft import Draft
 from social_agent.models.seed import Seed
@@ -36,10 +36,10 @@ def _patch_stores(tmp_path: Path):
     for sub in ("sources", "seeds", "drafts"):
         (data_dir / sub).mkdir(parents=True)
 
-    import social_agent.api.router_sources as rs
-    import social_agent.api.router_seeds as rse
     import social_agent.api.router_drafts as rd
     import social_agent.api.router_publish as rp
+    import social_agent.api.router_seeds as rse
+    import social_agent.api.router_sources as rs
 
     for mod in (rs, rse, rd, rp):
         mod.DATA_DIR = data_dir
@@ -126,11 +126,18 @@ class TestSeedsAPI:
     def test_generate_seeds_success(self, client, tmp_path):
         _create_test_source(client)
 
-        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=MOCK_COLLECTED):
-            with patch("social_agent.agents.ideator.IdeatorAgent.run", return_value=MOCK_SEEDS_JSON):
-                resp = client.post("/api/seeds/generate", json={
-                    "interests": "tech, python",
-                })
+        patch_fetch = patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        )
+        patch_ideator = patch(
+            "social_agent.agents.ideator.IdeatorAgent.run",
+            return_value=MOCK_SEEDS_JSON,
+        )
+        with patch_fetch, patch_ideator:
+            resp = client.post("/api/seeds/generate", json={
+                "interests": "tech, python",
+            })
         assert resp.status_code == 201
         data = resp.json()
         assert "seeds" in data
@@ -141,8 +148,15 @@ class TestSeedsAPI:
     def test_generate_seeds_dry_run(self, client):
         _create_test_source(client)
 
-        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=MOCK_COLLECTED):
-            with patch("social_agent.agents.ideator.IdeatorAgent.run", return_value=MOCK_SEEDS_JSON):
+        patch_fetch = patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        )
+        patch_ideator = patch(
+            "social_agent.agents.ideator.IdeatorAgent.run",
+            return_value=MOCK_SEEDS_JSON,
+        )
+        with patch_fetch, patch_ideator:
                 resp = client.post("/api/seeds/generate", json={
                     "interests": "tech",
                     "dry_run": True,
@@ -263,10 +277,39 @@ class TestPublishAPI:
     def test_publish_draft(self, client):
         draft = _create_test_draft(client)
         client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
-        resp = client.post(f"/api/publish/{draft['id']}")
+
+        patches = [
+            patch.object(global_settings, "twitter_api_key", "ck"),
+            patch.object(global_settings, "twitter_api_secret", "cs"),
+            patch.object(global_settings, "twitter_access_token", "at"),
+            patch.object(global_settings, "twitter_access_token_secret", "ats"),
+        ]
+        for p in patches:
+            p.start()
+
+        from social_agent.publishers.base import PublishResult
+
+        with patch(
+            "social_agent.api.router_publish.TwitterPublisher.publish",
+            return_value=PublishResult(success=True, platform_post_id="12345"),
+        ):
+            resp = client.post(f"/api/publish/{draft['id']}")
+
+        for p in patches:
+            p.stop()
+
         assert resp.status_code == 200
-        assert resp.json()["status"] == "published"
-        assert resp.json()["published_at"] is not None
+        data = resp.json()
+        assert data["status"] == "published"
+        assert data["platform_post_id"] == "12345"
+        assert data["published_at"] is not None
+
+    def test_publish_no_credentials(self, client):
+        draft = _create_test_draft(client)
+        client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
+        resp = client.post(f"/api/publish/{draft['id']}")
+        assert resp.status_code == 400
+        assert "No publisher configured" in resp.json()["detail"]
 
     def test_publish_not_approved(self, client):
         draft = _create_test_draft(client)

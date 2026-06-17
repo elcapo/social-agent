@@ -16,6 +16,7 @@ class DraftStatus(str, Enum):
     approved = "approved"
     rejected = "rejected"
     published = "published"
+    failed = "failed"
 
 
 class Draft(BaseModel):
@@ -25,6 +26,9 @@ class Draft(BaseModel):
     content: str = ""
     status: DraftStatus = DraftStatus.draft
     notes: Optional[str] = None
+    platform_post_id: Optional[str] = None
+    publish_error: Optional[str] = None
+    publish_attempts: int = 0
     created_at: datetime = Field(default_factory=_utcnow)
     published_at: Optional[datetime] = None
 
@@ -35,6 +39,9 @@ class Draft(BaseModel):
             "platform": self.platform,
             "status": self.status.value,
             "notes": self.notes,
+            "platform_post_id": self.platform_post_id,
+            "publish_error": self.publish_error,
+            "publish_attempts": self.publish_attempts,
             "created_at": self.created_at.isoformat(),
         }
         if self.published_at:
