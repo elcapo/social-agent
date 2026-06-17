@@ -93,6 +93,17 @@ class TestSourcesAPI:
         resp = client.get("/api/sources/nonexistent")
         assert resp.status_code == 404
 
+    def test_update_source_tags(self, client):
+        src = _create_test_source(client)
+        resp = client.patch(f"/api/sources/{src['id']}", params={
+            "name": src["name"], "source_type": "rss", "url": src["url"],
+            "priority": src["priority"], "tags": ["tech", "ai"],
+        })
+        assert resp.status_code == 200
+        assert resp.json()["tags"] == ["tech", "ai"]
+        get = client.get(f"/api/sources/{src['id']}")
+        assert get.json()["tags"] == ["tech", "ai"]
+
     def test_delete_source(self, client):
         create = client.post("/api/sources", params={
             "name": "Del", "source_type": "manual", "url": "https://example.com",

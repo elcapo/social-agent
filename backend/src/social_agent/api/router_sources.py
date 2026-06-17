@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from social_agent.models.source import Source, SourcePriority, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
@@ -29,7 +29,7 @@ def create_source(
     source_type: SourceType,
     url: str,
     priority: SourcePriority = SourcePriority.medium,
-    tags: list[str] = [],
+    tags: list[str] = Query([]),
 ) -> Source:
     source = Source(name=name, source_type=source_type, url=url, priority=priority, tags=tags)
     source_store.save(source)
@@ -51,7 +51,7 @@ def update_source(
     source_type: Optional[SourceType] = None,
     url: Optional[str] = None,
     priority: Optional[SourcePriority] = None,
-    tags: Optional[list[str]] = None,
+    tags: Optional[list[str]] = Query(None),
     enabled: Optional[bool] = None,
 ) -> Source:
     source = source_store.get(source_id)
