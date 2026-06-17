@@ -200,6 +200,90 @@ Actualmente los publishers publican de forma inmediata al invocar el comando o e
 - Tests para los nuevos endpoints de scheduler
 - Tests del comando CLI `schedule`
 
+## Fase 11 — Migración a base de datos (SQLite + patrón repositorio)
+
+### Contexto
+
+Actualmente toda la persistencia se basa en archivos Markdown con frontmatter YAML. Si bien es funcional para un proyecto pequeño, esta aproximación presenta limitaciones:
+- Consultas complejas (filtros múltiples, ordenaciones) requieren cargar y parsear todos los archivos
+- Sin integridad referencial ni transacciones
+- Escalabilidad limitada
+
+Se propone migrar a SQLite como base de datos ligera y embebida, aplicando el **patrón repositorio** para abstraer la capa de persistencia y facilitar futuras migraciones a otros motores (PostgreSQL, MySQL, etc.).
+
+### Plan de implementación
+
+#### 11.1 Elección de tecnología
+
+- **Base de datos:** SQLite (vía `aiosqlite` + `SQLAlchemy` para async)
+- **ORM/SQL:** SQLAlchemy 2.0 con modo `async` y `declarative mapping`
+- **Migraciones:** Alembic para control de versiones del esquema
+- **Patrón:** Repository Pattern con interfaces abstractas
+
+#### 11.2 Definir el esquema de base de datos
+
+- Tabla `sources` → equivalente a `Source` (id, type, name, url, priority, active, created_at, updated_at)
+- Tabla `seeds` → equivalente a `Seed` (id, source_id FK, content, status, interests, created_at, updated_at)
+- Tabla `drafts` → equivalente a `Draft` (id, seed_id FK, platform, content, status, scheduled_at, media_urls JSON, created_at, updated_at)
+- Tabla `published` → historial de publicaciones (id, draft_id FK, platform, post_url, published_at)
+- Usar `UUID` como Primary Key o `Integer` autoincremental (decidir en implementación)
+- Índices apropiados para búsquedas frecuentes (status, platform, scheduled_at, created_at)
+
+#### 11.3 Definir interfaces de repositorio
+
+Crear `backend/src/social_agent/storage/repositories/` con:
+
+- `base.py` — `ABC` con métodos CRUD genéricos (`get`, `list`, `create`, `update`, `delete`)
+- `source_repository.py` — `SourceRepository` con métodos específicos (`list_active`, `find_by_type`)
+- `seed_repository.py` — `SeedRepository` con métodos específicos (`list_by_status`, `list_by_source`)
+- `draft_repository.py` — `DraftRepository` con métodos específicos (`list_scheduled`, `list_by_platform`, `list_by_status`)
+
+Cada repositorio define una interfaz abstracta (`Protocol` o `ABC`) que cualquier implementación concreta debe cumplir.
+
+#### 11.4 Implementar repositorio SQLite con SQLAlchemy
+
+- `sqlalchemy_repository.py` — Implementación concreta de cada repositorio usando SQLAlchemy async sessions
+- Manejo de sesiones con `async_sessionmaker`
+- Mapeo de modelos ORM a modelos Pydantic del dominio
+- Manejo de `media_urls` como JSON en SQLite
+
+#### 11.5 Mantener `MarkdownStore` como implementación alternativa (opcional)
+
+- Para desarrollo local y simplicidad, mantener `MarkdownStore` pero adaptarlo a la misma interfaz de repositorio
+- Permitir cambiar entre implementaciones vía configuración (`config.py`)
+
+#### 11.6 Configurar Alembic
+
+- `alembic init alembic` en `backend/`
+- Configurar `alembic.ini` con `sqlalchemy.url`
+- Crear migración inicial con todas las tablas
+- Script de `seed` para datos iniciales (si aplica)
+
+#### 11.7 Actualizar dependencias
+
+- Añadir `sqlalchemy>=2.0`, `aiosqlite`, `alembic` a `pyproject.toml`
+- Opcional: `alembic-utils` para migraciones más complejas
+
+#### 11.8 Migrar la lógica de negocio
+
+- Actualizar `MarkdownStore` o crear nuevo `DatabaseStore` que use los repositorios
+- Los agentes (`ideator.py`, `writer.py`) y publishers deben recibir el repositorio por inyección de dependencias
+- Actualizar routers de FastAPI para usar los nuevos repositorios (vía `Depends`)
+- Actualizar comandos CLI para usar los nuevos repositorios
+
+#### 11.9 Estrategia de migración de datos
+
+- Script `migrate_to_sqlite.py` que lea todos los archivos Markdown existentes y los inserte en SQLite
+- Preservar IDs si es posible, o mantener un mapeo
+- Ejecutar como comando CLI `social-agent db migrate`
+
+#### 11.10 Tests
+
+- Tests unitarios para cada repositorio (usando SQLite en memoria)
+- Tests de integración con la base de datos real
+- Tests de la migración de datos
+- Verificar que todos los tests existentes siguen pasando (los de `MarkdownStore` deben coexistir)
+
 ---
 
 ### Notas técnicas
