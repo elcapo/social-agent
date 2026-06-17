@@ -94,14 +94,14 @@ social-agent/
 - [x] Tests — 27 tests, todos pasan
 
 ### Fase 3 — Writer y drafts multi-plataforma
-- [ ] Prompts de plataforma (Twitter, LinkedIn)
-- [ ] Writer agent (genera drafts)
-- [ ] Ciclo completo vía CLI
-- [ ] Tests
+- [x] Prompts de plataforma (Twitter, LinkedIn)
+- [x] Writer agent (genera drafts)
+- [x] Ciclo completo vía CLI
+- [x] Tests — 34 tests, todos pasan
 
 ### Fase 4 — API REST
-- [ ] FastAPI con routers (sources, seeds, drafts, publish)
-- [ ] Tests de integración
+- [x] FastAPI con routers (sources, seeds, drafts, publish)
+- [x] Tests de integración — 61 tests, todos pasan
 
 ### Fase 5 — Frontend Astro
 - [ ] Páginas básicas (dashboard, seeds, drafts)
