@@ -94,6 +94,18 @@ SOCIAL_AGENT_LINKEDIN_ACCESS_TOKEN=AQW...
 Sin estas credenciales los colectores sociales devuelven lista vacía.
 Las fuentes RSS y web scraping no requieren autenticación.
 
+## Servidores
+
+```bash
+# API REST (FastAPI) — http://localhost:8000
+uv run uvicorn social_agent.main:app --reload
+
+# Frontend (Astro) — http://localhost:4321
+cd frontend && npm run dev
+```
+
+El frontend está configurado para conectar con la API en `localhost:8000`.
+
 ## Desarrollo
 
 ```bash
