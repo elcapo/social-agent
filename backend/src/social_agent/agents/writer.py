@@ -19,9 +19,33 @@ Reglas:
   Todo lo que esté fuera de esas etiquetas será ignorado."""
 
 
+_THINKING_PREFIXES = (
+    "we need to", "let me", "i'll", "i will",
+    "the tone should", "avoid", "this should",
+)
+
+
 def _extract_post(text: str) -> str:
     m = re.search(r"<post>\s*(.*?)\s*</post>", text, re.DOTALL)
-    return m.group(1) if m else text.strip()
+    if m:
+        return m.group(1)
+
+    lines = text.strip().splitlines()
+    cleaned: list[str] = []
+    in_thinking = True
+    for line in lines:
+        stripped = line.strip().lower()
+        if in_thinking and (
+            any(stripped.startswith(p) for p in _THINKING_PREFIXES)
+            or "seed idea" in stripped
+            or not stripped
+        ):
+            continue
+        in_thinking = False
+        cleaned.append(line)
+
+    result = "\n".join(cleaned).strip()
+    return result if result else text.strip()
 
 
 class WriterAgent(BaseAgent):
@@ -51,7 +75,7 @@ class WriterAgent(BaseAgent):
             f"Envuelve el post final entre <post> y </post>."
         )
 
-        response = self.run(user_prompt, max_tokens=1024)
+        response = self.run(user_prompt, max_tokens=4096)
 
         if dry_run:
             return response

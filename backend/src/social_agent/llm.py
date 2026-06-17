@@ -35,7 +35,9 @@ def llm_complete(
     msg = response.choices[0].message
 
     content = msg.content or ""
-    if not content:
-        content = getattr(msg, "reasoning_content", None) or ""
+    reasoning = getattr(msg, "reasoning_content", None) or ""
+
+    if not content and reasoning:
+        content = reasoning
 
     return response if raw else content
