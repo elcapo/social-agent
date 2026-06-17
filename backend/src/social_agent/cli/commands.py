@@ -362,7 +362,7 @@ def drafts_edit(draft_id: str, new_content: str) -> None:
 @click.argument("draft_id")
 def drafts_publish(draft_id: str) -> None:
     """Mark a draft as published."""
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     draft = draft_store.get(draft_id)
     if not draft:
@@ -372,7 +372,7 @@ def drafts_publish(draft_id: str) -> None:
         click.echo("Only approved drafts can be published. Use 'approve' first.")
         return
     draft.status = DraftStatus.published
-    draft.published_at = datetime.utcnow()
+    draft.published_at = datetime.now(timezone.utc)
     draft_store.save(draft)
     click.echo(f"Draft '{draft_id}' published.")
 
