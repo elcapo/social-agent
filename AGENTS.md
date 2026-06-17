@@ -86,51 +86,10 @@ social-agent/
 └── AGENTS.md
 ```
 
-## Fases
-
-### Fase 1 — Base del proyecto
-- [x] AGENTS.md
-- [x] pyproject.toml + estructura de directorios
-- [x] Modelos Pydantic (Source, Seed, Draft)
-- [x] MarkdownStore (CRUD con frontmatter)
-- [x] CLI base con Click (skeleton de comandos)
-- [x] Tests unitarios (almacenamiento y modelos) — 19 tests, todos pasan
-- [x] Verificar que tests pasan
-
-### Fase 2 — Sistema de recolección e ideación
-- [x] Sistema de prompts (interests + fuentes)
-- [x] Collectors (RSS, web scraping, social) — RSSCollector, WebScraperCollector, TwitterCollector, LinkedInCollector
-- [x] Ideator agent (LLM vía LiteLLM)
-- [x] Tests — 27 tests, todos pasan
-
-### Fase 3 — Writer y drafts multi-plataforma
-- [x] Prompts de plataforma (Twitter, LinkedIn)
-- [x] Writer agent (genera drafts)
-- [x] Ciclo completo vía CLI
-- [x] Tests — 34 tests, todos pasan
-
-### Fase 4 — API REST
-- [x] FastAPI con routers (sources, seeds, drafts, publish)
-- [x] Tests de integración — 61 tests, todos pasan
-
-### Fase 5 — Frontend Astro
-- [x] Páginas básicas (dashboard, seeds, drafts)
-- [x] Componentes (Layout, Nav)
-
-### Fase 6 — Publicadores y APIs sociales
-- [x] Twitter publisher (API v2 con Tweepy)
-- [x] LinkedIn publisher (API Posts con httpx)
-- [x] Social collectors (TwitterCollector funcional, LinkedInCollector implementado)
-- [x] Tests — 81 tests, todos pasan
-
-### Fase 7 — Extensibilidad, pulido, docs
-- [x] Documentación de API
-- [x] Guía para añadir plataformas
-- [x] Tests finales
-
 ## Workflow
 
 1. **Cada fase** incluye escribir los tests correspondientes.
 2. **Antes de cerrar una fase**, ejecutar tests y verificar que todo pasa.
 3. **Avisar al usuario** al completar cada fase antes de pasar a la siguiente.
 4. **README.md** se mantiene actualizado con instrucciones de instalación, uso básico y estructura del proyecto.
+5. **ROADMAP.md** contiene el registro de fases completadas y planificadas.

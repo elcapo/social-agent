@@ -102,6 +102,54 @@ pero falta implementar la capa de media upload y extender el modelo `Draft`.
 - Tests de integración con mocking de las APIs de media upload
 - Verificar que los publishers existentes siguen funcionando sin medios (backwards compatibility)
 
+## Fase 9 — Revisión UI: componentes nativos de DaisyUI
+
+### Objetivo
+
+Revisar todo el frontend para asegurar que se usen los componentes nativos de DaisyUI
+siempre que sea posible, evitando HTML semántico plano o estilos CSS manuales que
+DaisyUI ya cubre.
+
+### Alcance
+
+- `frontend/src/components/` — Layout, Nav, y cualquier componente existente
+- `frontend/src/pages/` — index.astro, seeds.astro, drafts.astro
+
+### Criterios
+
+| Elemento | Componente DaisyUI nativo |
+|---|---|
+| Botones | `<button class="btn ...">` |
+| Tarjetas / paneles | `<div class="card ...">` |
+| Formularios e inputs | `<input class="input ..." />`, `<select class="select ...">` |
+| Badges / etiquetas | `<div class="badge ...">` |
+| Tablas | `<table class="table ...">` |
+| Navegación | `<div class="tabs ...">` o `<ul class="menu ...">` |
+| Loaders / estados vacíos | `<span class="loading ...">` |
+| Alertas / mensajes | `<div class="alert ...">` |
+| Modales | `<dialog class="modal ...">` |
+| Tooltips | `<div class="tooltip ...">` |
+| Dropdowns | `<details class="dropdown ...">` |
+| Indicadores de estado | `<div class="indicator ...">` |
+
+### Plan
+
+1. Instalar la skill oficial de DaisyUI en este proyecto: https://daisyui.com/llms.txt
+2. Auditar visualmente cada página y componente listando usos de HTML plano o CSS
+   inline que tenga un equivalente en DaisyUI
+3. Reemplazar cada caso identificado por su contraparte DaisyUI
+4. Verificar que no se pierde funcionalidad ni estilo visual
+5. Mantener consistencia de diseño (mismos colores, tamaños, variantes) en toda la app
+
+### Notas técnicas
+
+- El proyecto ya usa DaisyUI como plugin de Tailwind (confirmar en `astro.config.mjs`
+  y `tailwind.config.*`)
+- No añadir nuevas dependencias; solo refactorizar el marcado existente
+- Los tests del frontend (si los hay) deben seguir pasando
+
+---
+
 ### Notas técnicas
 
 | Plataforma | API de media upload | Límite de imágenes | Formato |
