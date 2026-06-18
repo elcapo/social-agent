@@ -42,9 +42,20 @@
 - [x] Guía para añadir plataformas
 - [x] Tests finales
 
+### Fase 8 — Soporte de imágenes en publicaciones
+- [x] Extender modelo `Draft` con `media_urls` y `media_paths`
+- [x] Añadir Pillow a dependencias
+- [x] Módulo `media.py` para procesamiento de imágenes
+- [x] TwitterPublisher con subida de medios (v1.1 API)
+- [x] LinkedInPublisher con subida de imágenes (v2 REST)
+- [x] Endpoint `POST /api/drafts/{id}/attach-media`
+- [x] CLI con flag `--media-url`
+- [x] Frontend con input de URLs y upload de archivos
+- [x] Tests
+
 ---
 
-## Fase 8 — Soporte de imágenes en publicaciones
+## Fase 9 — Revisión UI: componentes nativos de DaisyUI
 
 ### Contexto
 
