@@ -85,6 +85,93 @@ class TestTwitterPublisher:
         assert result.success is False
         assert "Rate limit" in result.error
 
+    def test_publish_with_media(self):
+        mock_client = MagicMock(spec=tweepy.Client)
+        mock_response = MagicMock()
+        mock_response.data = {"id": 12345}
+        mock_client.create_tweet.return_value = mock_response
+
+        mock_api = MagicMock()
+        mock_media = MagicMock()
+        mock_media.media_id = 999
+        mock_api.media_upload.return_value = mock_media
+
+        publisher = TwitterPublisher("ck", "cs", "at", "ats")
+        publisher.client = mock_client
+        publisher.api = mock_api
+
+        draft = Draft(
+            seed_id="s1", platform="twitter", content="Hello",
+            media_urls=["https://example.com/img.jpg"],
+        )
+
+        with patch("social_agent.publishers.twitter.prepare_media", return_value=b"fake_image_data"):
+            result = publisher.publish(draft)
+
+        assert result.success is True
+        assert result.platform_post_id == "12345"
+        mock_api.media_upload.assert_called_once()
+        mock_client.create_tweet.assert_called_once_with(
+            text="Hello", media_ids=[999]
+        )
+
+    def test_publish_with_media_path(self):
+        mock_client = MagicMock(spec=tweepy.Client)
+        mock_response = MagicMock()
+        mock_response.data = {"id": 54321}
+        mock_client.create_tweet.return_value = mock_response
+
+        mock_api = MagicMock()
+        mock_media = MagicMock()
+        mock_media.media_id = 888
+        mock_api.media_upload.return_value = mock_media
+
+        publisher = TwitterPublisher("ck", "cs", "at", "ats")
+        publisher.client = mock_client
+        publisher.api = mock_api
+
+        draft = Draft(
+            seed_id="s1", platform="twitter", content="Hello",
+            media_paths=["/tmp/local.jpg"],
+        )
+
+        with patch("social_agent.publishers.twitter.prepare_media", return_value=b"fake_local_data"):
+            result = publisher.publish(draft)
+
+        assert result.success is True
+        assert result.platform_post_id == "54321"
+        mock_api.media_upload.assert_called_once()
+        mock_client.create_tweet.assert_called_once_with(
+            text="Hello", media_ids=[888]
+        )
+
+    def test_publish_media_upload_failure_does_not_crash(self):
+        mock_client = MagicMock(spec=tweepy.Client)
+        mock_response = MagicMock()
+        mock_response.data = {"id": 77777}
+        mock_client.create_tweet.return_value = mock_response
+
+        mock_api = MagicMock()
+
+        publisher = TwitterPublisher("ck", "cs", "at", "ats")
+        publisher.client = mock_client
+        publisher.api = mock_api
+
+        draft = Draft(
+            seed_id="s1", platform="twitter", content="Hello",
+            media_urls=["https://example.com/bad.jpg"],
+        )
+
+        with patch(
+            "social_agent.publishers.twitter.prepare_media",
+            side_effect=ValueError("Bad image"),
+        ):
+            result = publisher.publish(draft)
+
+        assert result.success is True
+        assert result.platform_post_id == "77777"
+        mock_client.create_tweet.assert_called_once_with(text="Hello")
+
 
 class TestLinkedInPublisher:
     def test_publish_success(self, tmp_path):
@@ -163,6 +250,107 @@ class TestLinkedInPublisher:
 
         assert result.success is False
         assert "403" in result.error
+
+    def test_publish_with_media_success(self):
+        draft = Draft(
+            seed_id="s1", platform="linkedin", content="Post with image",
+            media_urls=["https://example.com/img.jpg"],
+        )
+
+        with patch.object(httpx, "get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"sub": "abc123"},
+            )
+            with patch("social_agent.publishers.linkedin.prepare_media", return_value=b"img_data"):
+                with patch.object(httpx, "post") as mock_post:
+                    register_resp = MagicMock(
+                        status_code=200,
+                        json=lambda: {
+                            "value": {
+                                "uploadUrl": "https://upload.linkedin.com/img",
+                                "image": "urn:li:image:abc123",
+                            }
+                        },
+                    )
+                    post_resp = MagicMock(
+                        status_code=201,
+                        headers={"x-restli-id": "urn:li:post:media123"},
+                        json=lambda: {},
+                    )
+                    mock_post.side_effect = [register_resp, post_resp]
+
+                    with patch.object(httpx, "put") as mock_put:
+                        mock_put.return_value = MagicMock(status_code=201)
+
+                        publisher = LinkedInPublisher(access_token="tok")
+                        result = publisher.publish(draft)
+
+        assert result.success is True
+        assert result.platform_post_id == "urn:li:post:media123"
+        # Verify image was included in payload
+        post_call = mock_post.call_args_list[1]
+        payload = post_call.kwargs["json"]
+        assert payload["content"]["media"]["id"] == "urn:li:image:abc123"
+
+    def test_publish_with_media_path(self):
+        draft = Draft(
+            seed_id="s1", platform="linkedin", content="Post with local image",
+            media_paths=["/tmp/local.jpg"],
+        )
+
+        with patch.object(httpx, "get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"sub": "abc123"},
+            )
+            with patch("social_agent.publishers.linkedin.prepare_media", return_value=b"img_data"):
+                with patch.object(httpx, "post") as mock_post:
+                    register_resp = MagicMock(
+                        status_code=200,
+                        json=lambda: {
+                            "value": {
+                                "uploadUrl": "https://upload.linkedin.com/img",
+                                "image": "urn:li:image:local",
+                            }
+                        },
+                    )
+                    post_resp = MagicMock(
+                        status_code=201,
+                        headers={"x-restli-id": "urn:li:post:local123"},
+                        json=lambda: {},
+                    )
+                    mock_post.side_effect = [register_resp, post_resp]
+
+                    with patch.object(httpx, "put") as mock_put:
+                        mock_put.return_value = MagicMock(status_code=201)
+
+                        publisher = LinkedInPublisher(access_token="tok")
+                        result = publisher.publish(draft)
+
+        assert result.success is True
+        assert result.platform_post_id == "urn:li:post:local123"
+        post_call = mock_post.call_args_list[1]
+        payload = post_call.kwargs["json"]
+        assert payload["content"]["media"]["id"] == "urn:li:image:local"
+
+    def test_publish_with_media_upload_failure(self):
+        draft = Draft(
+            seed_id="s1", platform="linkedin", content="Post with image",
+            media_urls=["https://example.com/img.jpg"],
+        )
+
+        with patch.object(httpx, "get") as mock_get:
+            mock_get.return_value = MagicMock(
+                status_code=200,
+                json=lambda: {"sub": "abc123"},
+            )
+            with patch("social_agent.publishers.linkedin.prepare_media", side_effect=Exception("Bad image")):
+                publisher = LinkedInPublisher(access_token="tok")
+                result = publisher.publish(draft)
+
+        assert result.success is False
+        assert "Bad image" in result.error
 
 
 class TestDraftPublishModel:

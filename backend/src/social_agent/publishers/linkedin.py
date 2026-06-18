@@ -4,6 +4,7 @@ from typing import Optional
 
 import httpx
 
+from social_agent.media import prepare_media
 from social_agent.models.draft import Draft
 
 from .base import BasePublisher, PublishResult
@@ -33,6 +34,35 @@ class LinkedInPublisher(BasePublisher):
         sub = resp.json()["sub"]
         return f"urn:li:person:{sub}"
 
+    def _upload_image(self, author: str, url: str) -> str:
+        data = prepare_media(url)
+
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json",
+            "LinkedIn-Version": LINKEDIN_VERSION,
+            "X-Restli-Protocol-Version": "2.0.0",
+        }
+
+        register_resp = httpx.post(
+            f"{LINKEDIN_API_BASE}/rest/images?action=initializeUpload",
+            headers=headers,
+            json={"initializeUploadRequest": {"owner": author}},
+        )
+        register_resp.raise_for_status()
+        reg_data = register_resp.json()
+        upload_url = reg_data["value"]["uploadUrl"]
+        image_urn = reg_data["value"]["image"]
+
+        upload_headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/octet-stream",
+        }
+        upload_resp = httpx.put(upload_url, headers=upload_headers, content=data)
+        upload_resp.raise_for_status()
+
+        return image_urn
+
     def publish(self, draft: Draft) -> PublishResult:
         try:
             author = self._get_person_urn()
@@ -60,6 +90,22 @@ class LinkedInPublisher(BasePublisher):
             },
             "lifecycleState": "PUBLISHED",
         }
+
+        all_sources = draft.media_urls + draft.media_paths
+        if all_sources:
+            try:
+                image_urn = self._upload_image(author, all_sources[0])
+                payload["content"] = {
+                    "media": {
+                        "title": "",
+                        "id": image_urn,
+                    }
+                }
+            except Exception as e:
+                return PublishResult(
+                    success=False,
+                    error=f"Failed to upload image to LinkedIn: {e}",
+                )
 
         try:
             resp = httpx.post(

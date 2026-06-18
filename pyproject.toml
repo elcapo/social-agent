@@ -16,6 +16,8 @@ dependencies = [
     "litellm",
     "python-frontmatter",
     "tweepy>=4.16",
+    "Pillow>=10.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

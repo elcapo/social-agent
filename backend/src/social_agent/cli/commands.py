@@ -420,7 +420,9 @@ def drafts_edit(draft_id: str, new_content: str) -> None:
 
 @drafts.command("publish")
 @click.argument("draft_id")
-def drafts_publish(draft_id: str) -> None:
+@click.option("--media-url", multiple=True, help="URL of image to attach (may be repeated)")
+@click.option("--media-path", multiple=True, help="Local path of image to attach (may be repeated)")
+def drafts_publish(draft_id: str, media_url: tuple[str, ...], media_path: tuple[str, ...]) -> None:
     """Publish a draft to its social media platform."""
     from social_agent.publishers.linkedin import LinkedInPublisher
     from social_agent.publishers.twitter import TwitterPublisher
@@ -463,6 +465,10 @@ def drafts_publish(draft_id: str) -> None:
         click.echo(f"Unknown platform '{draft.platform}'.")
         return
 
+    if media_url:
+        draft.media_urls = list(media_url)
+    if media_path:
+        draft.media_paths = list(media_path)
     draft.publish_attempts += 1
     result = publisher.publish(draft)
 

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Optional
 
 import frontmatter
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from social_agent.agents.writer import WriterAgent
@@ -35,6 +36,11 @@ class UpdateDraftRequest(BaseModel):
     status: Optional[str] = None
     content: Optional[str] = None
     notes: Optional[str] = None
+    media_urls: Optional[list[str]] = None
+
+
+class AttachMediaRequest(BaseModel):
+    media_urls: list[str] = []
 
 
 @router.get("/drafts")
@@ -126,6 +132,37 @@ def update_draft(draft_id: str, body: UpdateDraftRequest) -> Draft:
             draft.status = DraftStatus.draft
     if body.notes is not None:
         draft.notes = body.notes
+    if body.media_urls is not None:
+        draft.media_urls = body.media_urls
 
+    draft_store.save(draft)
+    return draft
+
+
+@router.post("/drafts/{draft_id}/attach-media")
+def attach_media(draft_id: str, body: AttachMediaRequest) -> Draft:
+    draft = draft_store.get(draft_id)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+
+    draft.media_urls.extend(body.media_urls)
+    draft_store.save(draft)
+    return draft
+
+
+@router.post("/drafts/{draft_id}/upload-media", status_code=201)
+def upload_media(draft_id: str, file: UploadFile) -> Draft:
+    draft = draft_store.get(draft_id)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+
+    media_dir = DATA_DIR / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+
+    dest = media_dir / f"{draft_id}_{file.filename or 'upload'}"
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    draft.media_paths.append(f"data/media/{draft_id}_{file.filename or 'upload'}")
     draft_store.save(draft)
     return draft

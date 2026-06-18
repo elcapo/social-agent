@@ -59,8 +59,15 @@ import Nav from "../components/Nav.astro";
         <legend class="fieldset-legend text-xl font-bold">Edit Draft</legend>
         <label class="label">Content</label>
         <textarea id="edit-content" class="textarea w-full h-48"></textarea>
+        <label class="label">Media URLs (one per line)</label>
+        <textarea id="edit-media-urls" class="textarea w-full h-20" placeholder="https://example.com/image1.jpg"></textarea>
+        <label class="label">Local files uploaded</label>
+        <div id="edit-media-paths" class="text-sm text-base-content/60"></div>
+        <label class="label">Upload new file</label>
+        <input type="file" id="edit-media-file" accept="image/*" class="file-input file-input-bordered w-full" />
       </fieldset>
       <div class="modal-action">
+        <button class="btn" id="edit-upload-file">Upload file</button>
         <button class="btn" id="edit-cancel">Cancel</button>
         <button class="btn btn-primary" id="edit-save">Save</button>
       </div>
@@ -155,6 +162,7 @@ import Nav from "../components/Nav.astro";
           <tr>
             <th>Platform</th>
             <th>Content</th>
+            <th>Media</th>
             <th>Status</th>
             <th>Created</th>
             <th></th>
@@ -164,6 +172,13 @@ import Nav from "../components/Nav.astro";
           <tr>
             <td><span class="font-semibold text-xs uppercase tracking-wider">${esc(d.platform)}</span></td>
             <td><div class="text-sm text-base-content/60 max-w-xs truncate">${d.content ? esc(d.content.substring(0, 100)) + (d.content.length > 100 ? "…" : "") : "—"}</div></td>
+            <td>${(() => {
+              const urls = d.media_urls || [];
+              const paths = d.media_paths || [];
+              const allMedia = [...urls.map(u => ({ type: "url", src: u })), ...paths.map(p => ({ type: "path", src: `${API}/media/${p.split("/").pop()}` }))];
+              if (!allMedia.length) return '<span class="text-base-content/20">—</span>';
+              return `<div class="flex gap-1">${allMedia.slice(0, 3).map(m => `<img src="${esc(m.src)}" class="w-8 h-8 object-cover rounded" alt="" />`).join("")}${allMedia.length > 3 ? `<span class="text-xs text-base-content/40">+${allMedia.length - 3}</span>` : ""}</div>`;
+            })()}</td>
             <td><span class="badge badge-sm badge-soft ${d.status === "draft" ? "badge-warning" : d.status === "approved" ? "badge-info" : d.status === "published" ? "badge-success" : "badge-error"}">${d.status}</span></td>
             <td class="text-sm text-base-content/40">${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</td>
             <td>${d.status === "draft"
@@ -188,6 +203,11 @@ import Nav from "../components/Nav.astro";
             const draft = await res.json();
             document.getElementById("edit-id").value = draft.id;
             document.getElementById("edit-content").value = draft.content;
+            document.getElementById("edit-media-urls").value = (draft.media_urls || []).join("\n");
+            const paths = draft.media_paths || [];
+            document.getElementById("edit-media-paths").innerHTML = paths.length
+              ? paths.map(p => `<div class="flex items-center gap-2"><span class="badge badge-sm badge-soft badge-info">file</span> ${esc(p.split("/").pop())}</div>`).join("")
+              : '<span class="text-base-content/40">No local files</span>';
             document.getElementById("edit-modal").showModal();
             return;
           }
@@ -225,6 +245,36 @@ import Nav from "../components/Nav.astro";
       }
     });
 
+    document.getElementById("edit-upload-file").addEventListener("click", async () => {
+      const id = document.getElementById("edit-id").value;
+      const fileInput = document.getElementById("edit-media-file");
+      const file = fileInput.files?.[0];
+      if (!file) { showError("Select a file first."); return; }
+
+      const btn = document.getElementById("edit-upload-file");
+      btn.disabled = true;
+      btn.textContent = "Uploading...";
+      hideError();
+
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`${API}/drafts/${id}/upload-media`, {
+          method: "POST",
+          body: form,
+        });
+        if (!res.ok) throw new Error(await getErrorMsg(res));
+        fileInput.value = "";
+        document.getElementById("edit-modal").close();
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Upload file";
+      }
+    });
+
     document.getElementById("edit-cancel").addEventListener("click", () => {
       document.getElementById("edit-modal").close();
     });
@@ -232,16 +282,20 @@ import Nav from "../components/Nav.astro";
     document.getElementById("edit-save").addEventListener("click", async () => {
       const id = document.getElementById("edit-id").value;
       const content = document.getElementById("edit-content").value;
+      const mediaUrlsRaw = document.getElementById("edit-media-urls").value;
+      const mediaUrls = mediaUrlsRaw.split("\n").map(s => s.trim()).filter(Boolean);
       const btn = document.getElementById("edit-save");
       btn.disabled = true;
       btn.textContent = "Saving...";
       hideError();
 
       try {
+        const body = { content };
+        if (mediaUrls.length) body.media_urls = mediaUrls;
         const res = await fetch(`${API}/drafts/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await getErrorMsg(res));
         document.getElementById("edit-modal").close();

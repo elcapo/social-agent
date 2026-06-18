@@ -29,6 +29,8 @@ class Draft(BaseModel):
     platform_post_id: Optional[str] = None
     publish_error: Optional[str] = None
     publish_attempts: int = 0
+    media_urls: list[str] = []
+    media_paths: list[str] = []
     created_at: datetime = Field(default_factory=_utcnow)
     published_at: Optional[datetime] = None
 
@@ -42,6 +44,8 @@ class Draft(BaseModel):
             "platform_post_id": self.platform_post_id,
             "publish_error": self.publish_error,
             "publish_attempts": self.publish_attempts,
+            "media_urls": self.media_urls,
+            "media_paths": self.media_paths,
             "created_at": self.created_at.isoformat(),
         }
         if self.published_at:
@@ -55,4 +59,8 @@ class Draft(BaseModel):
             data["created_at"] = datetime.fromisoformat(data["created_at"])
         if data.get("published_at"):
             data["published_at"] = datetime.fromisoformat(data["published_at"])
+        if not data.get("media_urls"):
+            data["media_urls"] = []
+        if not data.get("media_paths"):
+            data["media_paths"] = []
         return cls(**data)

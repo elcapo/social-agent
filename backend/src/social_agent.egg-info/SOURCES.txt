@@ -4,6 +4,7 @@ backend/src/social_agent/__init__.py
 backend/src/social_agent/config.py
 backend/src/social_agent/llm.py
 backend/src/social_agent/main.py
+backend/src/social_agent/media.py
 backend/src/social_agent.egg-info/PKG-INFO
 backend/src/social_agent.egg-info/SOURCES.txt
 backend/src/social_agent.egg-info/dependency_links.txt

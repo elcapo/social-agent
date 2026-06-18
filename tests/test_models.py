@@ -101,3 +101,38 @@ class TestDraft:
         draft.published_at = datetime.now(timezone.utc)
         assert draft.status == DraftStatus.published
         assert draft.published_at is not None
+
+    def test_draft_media_urls_default(self):
+        draft = Draft(seed_id="s1", platform="twitter", content="Hello")
+        assert draft.media_urls == []
+        assert draft.media_paths == []
+
+    def test_draft_media_urls_roundtrip(self):
+        draft = Draft(
+            seed_id="s1",
+            platform="twitter",
+            content="Hello",
+            media_urls=["https://example.com/img1.jpg", "https://example.com/img2.png"],
+        )
+        fm = draft.to_frontmatter()
+        fm["content"] = draft.content
+        restored = Draft.from_frontmatter(fm)
+        assert restored.media_urls == draft.media_urls
+        assert restored.media_paths == []
+
+    def test_draft_media_urls_empty_after_roundtrip(self):
+        draft = Draft(seed_id="s1", platform="twitter", content="No media")
+        fm = draft.to_frontmatter()
+        fm["content"] = draft.content
+        restored = Draft.from_frontmatter(fm)
+        assert restored.media_urls == []
+
+    def test_draft_media_paths_roundtrip(self):
+        draft = Draft(
+            seed_id="s1", platform="twitter", content="Local",
+            media_paths=["/tmp/img1.jpg", "/tmp/img2.png"],
+        )
+        fm = draft.to_frontmatter()
+        fm["content"] = draft.content
+        restored = Draft.from_frontmatter(fm)
+        assert restored.media_paths == ["/tmp/img1.jpg", "/tmp/img2.png"]

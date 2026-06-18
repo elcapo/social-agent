@@ -15,6 +15,8 @@ Requires-Dist: beautifulsoup4
 Requires-Dist: litellm
 Requires-Dist: python-frontmatter
 Requires-Dist: tweepy>=4.16
+Requires-Dist: Pillow>=10.0
+Requires-Dist: python-multipart>=0.0.9
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
 Requires-Dist: ruff>=0.3; extra == "dev"

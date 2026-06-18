@@ -339,6 +339,126 @@ class TestDraftsAPI:
         assert resp.json()["content"] == "new content"
         assert resp.json()["status"] == "draft"
 
+    def test_attach_media_to_draft(self, client):
+        draft = _create_test_draft(client)
+        resp = client.post(
+            f"/api/drafts/{draft['id']}/attach-media",
+            json={"media_urls": ["https://example.com/img.jpg"]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "https://example.com/img.jpg" in data["media_urls"]
+
+    def test_attach_media_appends(self, client):
+        draft = _create_test_draft(client)
+        client.post(
+            f"/api/drafts/{draft['id']}/attach-media",
+            json={"media_urls": ["https://example.com/img1.jpg"]},
+        )
+        resp = client.post(
+            f"/api/drafts/{draft['id']}/attach-media",
+            json={"media_urls": ["https://example.com/img2.jpg"]},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["media_urls"] == [
+            "https://example.com/img1.jpg",
+            "https://example.com/img2.jpg",
+        ]
+
+    def test_attach_media_draft_not_found(self, client):
+        resp = client.post(
+            "/api/drafts/nonexistent/attach-media",
+            json={"media_urls": ["https://example.com/img.jpg"]},
+        )
+        assert resp.status_code == 404
+
+    def test_update_draft_media_urls(self, client):
+        draft = _create_test_draft(client)
+        resp = client.patch(
+            f"/api/drafts/{draft['id']}",
+            json={"media_urls": ["https://example.com/img.jpg"]},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["media_urls"] == ["https://example.com/img.jpg"]
+
+    def test_upload_media_file(self, client, tmp_path):
+        draft = _create_test_draft(client)
+
+        import io
+        file_content = b"fake_image_content"
+        resp = client.post(
+            f"/api/drafts/{draft['id']}/upload-media",
+            files={"file": ("test.png", io.BytesIO(file_content), "image/png")},
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert len(data["media_paths"]) == 1
+        assert data["media_paths"][0].endswith("test.png")
+
+    def test_upload_media_file_draft_not_found(self, client):
+        import io
+        resp = client.post(
+            "/api/drafts/nonexistent/upload-media",
+            files={"file": ("test.png", io.BytesIO(b"data"), "image/png")},
+        )
+        assert resp.status_code == 404
+
+    def test_publish_with_uploaded_media(self, client):
+        """End-to-end: upload file → approve → publish with media."""
+        draft = _create_test_draft(client)
+
+        import io
+        upload_resp = client.post(
+            f"/api/drafts/{draft['id']}/upload-media",
+            files={"file": ("test.png", io.BytesIO(b"fake_png"), "image/png")},
+        )
+        assert upload_resp.status_code == 201
+        assert len(upload_resp.json()["media_paths"]) == 1
+
+        client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
+
+        patches = [
+            patch.object(global_settings, "twitter_api_key", "ck"),
+            patch.object(global_settings, "twitter_api_secret", "cs"),
+            patch.object(global_settings, "twitter_access_token", "at"),
+            patch.object(global_settings, "twitter_access_token_secret", "ats"),
+        ]
+        for p in patches:
+            p.start()
+
+        from social_agent.publishers.base import PublishResult
+
+        with patch(
+            "social_agent.api.router_publish.TwitterPublisher.publish",
+            return_value=PublishResult(success=True, platform_post_id="e2e_123"),
+        ) as mock_publish:
+            resp = client.post(f"/api/publish/{draft['id']}")
+
+        for p in patches:
+            p.stop()
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "published"
+        mock_publish.assert_called_once()
+        call_draft = mock_publish.call_args[0][0]
+        assert len(call_draft.media_paths) == 1
+        assert "test.png" in call_draft.media_paths[0]
+
+    def test_upload_media_appends_to_existing(self, client, tmp_path):
+        draft = _create_test_draft(client)
+
+        import io
+        client.post(
+            f"/api/drafts/{draft['id']}/upload-media",
+            files={"file": ("img1.png", io.BytesIO(b"data1"), "image/png")},
+        )
+        resp = client.post(
+            f"/api/drafts/{draft['id']}/upload-media",
+            files={"file": ("img2.png", io.BytesIO(b"data2"), "image/png")},
+        )
+        assert resp.status_code == 201
+        assert len(resp.json()["media_paths"]) == 2
+
 
 # ── Publish ──
 
@@ -377,7 +497,21 @@ class TestPublishAPI:
     def test_publish_no_credentials(self, client):
         draft = _create_test_draft(client)
         client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
+
+        patches = [
+            patch.object(global_settings, "twitter_api_key", None),
+            patch.object(global_settings, "twitter_api_secret", None),
+            patch.object(global_settings, "twitter_access_token", None),
+            patch.object(global_settings, "twitter_access_token_secret", None),
+        ]
+        for p in patches:
+            p.start()
+
         resp = client.post(f"/api/publish/{draft['id']}")
+
+        for p in patches:
+            p.stop()
+
         assert resp.status_code == 400
         assert "No publisher configured" in resp.json()["detail"]
 
