@@ -44,14 +44,33 @@ def read_local_image(path: str) -> bytes:
     return p.read_bytes()
 
 
+def _normalize_mode(img: Image.Image) -> Image.Image:
+    if img.mode in ("RGBA", "LA", "PA"):
+        img = img.convert("RGB")
+    elif img.mode == "CMYK":
+        img = img.convert("RGB")
+    elif img.mode == "P":
+        img = img.convert("RGB")
+    return img
+
+
 def resize_if_needed(data: bytes, max_dim: int = 2048) -> bytes:
     img = Image.open(BytesIO(data))
-    if max(img.size) <= max_dim:
+    if max(img.size) <= max_dim and img.mode in ("RGB", "L"):
         return data
+    img = _normalize_mode(img)
     img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
     buf = BytesIO()
     fmt = img.format or "PNG"
-    img.save(buf, format=fmt)
+    if fmt == "JPG":
+        fmt = "JPEG"
+    exif = img.info.get("exif")
+    save_kwargs: dict = {"format": fmt}
+    if exif is not None:
+        save_kwargs["exif"] = exif
+    if fmt == "JPEG":
+        save_kwargs["quality"] = 85
+    img.save(buf, **save_kwargs)
     return buf.getvalue()
 
 

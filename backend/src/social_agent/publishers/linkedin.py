@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from io import BytesIO
 from typing import Optional
 
 import httpx
+from PIL import Image
 
 from social_agent.media import prepare_media
 from social_agent.models.draft import Draft
@@ -34,10 +36,16 @@ class LinkedInPublisher(BasePublisher):
         sub = resp.json()["sub"]
         return f"urn:li:person:{sub}"
 
-    def _upload_image(self, author: str, url: str) -> str:
-        data = prepare_media(url)
+    def _upload_image(self, author: str, source: str) -> str:
+        data = prepare_media(source)
 
-        headers = {
+        try:
+            fmt = Image.open(BytesIO(data)).format or "PNG"
+            content_type = f"image/{fmt.lower()}"
+        except Exception:
+            content_type = "application/octet-stream"
+
+        register_headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
             "LinkedIn-Version": LINKEDIN_VERSION,
@@ -46,7 +54,7 @@ class LinkedInPublisher(BasePublisher):
 
         register_resp = httpx.post(
             f"{LINKEDIN_API_BASE}/rest/images?action=initializeUpload",
-            headers=headers,
+            headers=register_headers,
             json={"initializeUploadRequest": {"owner": author}},
         )
         register_resp.raise_for_status()
@@ -54,11 +62,12 @@ class LinkedInPublisher(BasePublisher):
         upload_url = reg_data["value"]["uploadUrl"]
         image_urn = reg_data["value"]["image"]
 
-        upload_headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/octet-stream",
-        }
-        upload_resp = httpx.put(upload_url, headers=upload_headers, content=data)
+        upload_resp = httpx.put(
+            upload_url,
+            headers={"Content-Type": content_type},
+            content=data,
+            follow_redirects=True,
+        )
         upload_resp.raise_for_status()
 
         return image_urn
