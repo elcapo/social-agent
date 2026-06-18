@@ -55,7 +55,10 @@ Reglas:
 - Genera ideas variadas, no repitas el mismo ángulo.
 - Responde SOLO con una lista de objetos JSON, sin markdown ni explicaciones.
 - Cada objeto debe tener: title, summary, tags (lista de strings), source_index (int).
-- source_index es el índice del contenido del que deriva la idea (el que está entre corchetes)."""
+- source_index es el índice del contenido del que deriva la idea (el que está entre corchetes).
+- El campo summary debe ser un resumen sustancial de 2-3 párrafos que capture los puntos clave del contenido original."""
+
+
 
 
 USER_TEMPLATE = """## Intereses del usuario
@@ -66,7 +69,7 @@ USER_TEMPLATE = """## Intereses del usuario
 
 {collected}
 
-Genera entre 3 y 5 ideas para posts basadas en el contenido anterior."""
+Genera entre 1 y 3 ideas detalladas para posts basadas en el contenido anterior."""
 
 
 class IdeatorAgent(BaseAgent):
@@ -89,7 +92,7 @@ class IdeatorAgent(BaseAgent):
             return (
                 f"--- [{idx}] {item.title} ({item.source_name}) ---\n"
                 f"URL: {item.url}\n"
-                f"{item.content[:500]}"
+                f"{item.content[:1500]}"
             )
 
         collected_text = "\n\n".join(

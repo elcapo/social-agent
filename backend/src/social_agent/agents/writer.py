@@ -61,11 +61,13 @@ class WriterAgent(BaseAgent):
         dry_run: bool = False,
     ) -> Draft | str:
         tags_str = ", ".join(seed.tags) if seed.tags else "(none)"
+        url_str = seed.source_url or "(none)"
 
         user_prompt = (
             f"## Idea / Seed\n\n"
             f"Título: {seed.title}\n"
             f"Resumen: {seed.summary}\n"
+            f"URL original: {url_str}\n"
             f"Tags: {tags_str}\n\n"
             f"## Instrucciones de plataforma\n\n"
             f"{platform_instructions}\n\n"
