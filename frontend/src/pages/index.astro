@@ -31,13 +31,13 @@ import Nav from "../components/Nav.astro";
       <section class="card bg-base-100 border border-base-300 shadow-sm">
         <div class="card-body p-5">
           <h2 class="card-title text-sm uppercase tracking-wider text-base-content/60">Recent Seeds</h2>
-          <div id="recent-seeds"><p class="text-sm text-base-content/40">Loading...</p></div>
+          <div id="recent-seeds"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
         </div>
       </section>
       <section class="card bg-base-100 border border-base-300 shadow-sm">
         <div class="card-body p-5">
           <h2 class="card-title text-sm uppercase tracking-wider text-base-content/60">Recent Drafts</h2>
-          <div id="recent-drafts"><p class="text-sm text-base-content/40">Loading...</p></div>
+          <div id="recent-drafts"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
         </div>
       </section>
     </div>
@@ -72,7 +72,7 @@ import Nav from "../components/Nav.astro";
               </div>
               <span class="badge badge-sm badge-soft ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span>
             </a>`).join("")}</div>`
-          : '<p class="text-sm text-base-content/40 py-2">No seeds yet.</p>';
+          : '<div class="alert bg-base-200 text-sm">No seeds yet.</div>';
 
       const recentDrafts = drafts.slice(-5).reverse();
       document.getElementById("recent-drafts").innerHTML =
@@ -88,7 +88,7 @@ import Nav from "../components/Nav.astro";
               <span class="badge badge-sm badge-soft ${d.status === "draft" ? "badge-warning" : d.status === "approved" ? "badge-info" : d.status === "published" ? "badge-success" : "badge-error"}">${d.status}</span>
             </a>`;
           }).join("")}</div>`
-          : '<p class="text-sm text-base-content/40 py-2">No drafts yet.</p>';
+          : '<div class="alert bg-base-200 text-sm">No drafts yet.</div>';
     }
 
     function esc(str) {

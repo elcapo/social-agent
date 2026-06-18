@@ -12,7 +12,7 @@ import Nav from "../components/Nav.astro";
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
-    <div id="seeds-list"><p class="text-sm text-base-content/40">Loading...</p></div>
+    <div id="seeds-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
   </main>
 
   <dialog id="generate-modal" class="modal">
@@ -81,7 +81,7 @@ import Nav from "../components/Nav.astro";
       const container = document.getElementById("seeds-list");
 
       if (!seeds.length) {
-        container.innerHTML = '<p class="text-sm text-base-content/40">No seeds yet. Click "Generate from sources" to create some.</p>';
+        container.innerHTML = '<div class="alert bg-base-200 text-sm">No seeds yet. Click "Generate from sources" to create some.</div>';
         return;
       }
 
@@ -100,7 +100,7 @@ import Nav from "../components/Nav.astro";
           <tr>
             <td><div class="font-medium">${esc(s.title)}</div><div class="text-xs text-base-content/40">${esc(s.summary)}</div></td>
             <td><span class="text-xs text-base-content/50 max-w-[120px] inline-block truncate" title="${esc(s.source_url || "")}">${s.source_url ? esc(s.source_url.replace(/^https?:\/\//, "")) : "—"}</span></td>
-            <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-outline mr-1">${esc(t)}</span>`).join("")}</td>
+            <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary mr-1">${esc(t)}</span>`).join("")}</td>
             <td><span class="badge badge-sm badge-soft ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span></td>
             <td class="text-sm text-base-content/40">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
             <td>${s.status === "pending"

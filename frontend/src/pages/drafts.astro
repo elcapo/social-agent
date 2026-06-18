@@ -12,7 +12,7 @@ import Nav from "../components/Nav.astro";
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
-    <div id="drafts-list"><p class="text-sm text-base-content/40">Loading...</p></div>
+    <div id="drafts-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
   </main>
 
   <dialog id="generate-modal" class="modal">
@@ -153,7 +153,7 @@ import Nav from "../components/Nav.astro";
       const container = document.getElementById("drafts-list");
 
       if (!drafts.length) {
-        container.innerHTML = '<p class="text-sm text-base-content/40">No drafts yet. Click "Generate from seed" to create some.</p>';
+        container.innerHTML = '<div class="alert bg-base-200 text-sm">No drafts yet. Click "Generate from seed" to create some.</div>';
         return;
       }
 

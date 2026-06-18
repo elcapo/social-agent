@@ -12,7 +12,7 @@ import Nav from "../components/Nav.astro";
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
-    <div id="sources-list"><p class="text-sm text-base-content/40">Loading...</p></div>
+    <div id="sources-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
   </main>
 
   <dialog id="form-modal" class="modal">
@@ -49,7 +49,6 @@ import Nav from "../components/Nav.astro";
 
   <script>
     const API = "http://localhost:8000/api";
-    let editId = null;
 
     const errorEl = document.getElementById("error-msg");
 
@@ -70,6 +69,10 @@ import Nav from "../components/Nav.astro";
       } catch { return "Request failed"; }
     }
 
+    function getDomain(url) {
+      try { return new URL(url).hostname; } catch { return url; }
+    }
+
     async function load() {
       hideError();
       const res = await fetch(`${API}/sources`);
@@ -77,31 +80,37 @@ import Nav from "../components/Nav.astro";
       const container = document.getElementById("sources-list");
 
       if (!sources.length) {
-        container.innerHTML = '<p class="text-sm text-base-content/40">No sources configured. Add one to get started.</p>';
+        container.innerHTML = '<div class="alert bg-base-200 text-sm">No sources configured. Add one to get started.</div>';
         return;
       }
 
-      container.innerHTML = `<div class="overflow-x-auto"><table class="table table-zinc">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>URL</th>
-            <th>Priority</th>
-            <th>Tags</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>${sources.map(s => `
-          <tr>
-            <td class="font-medium">${esc(s.name)}</td>
-            <td><span class="badge badge-sm">${esc(s.source_type)}</span></td>
-            <td class="text-sm text-base-content/60 max-w-[220px] truncate">${esc(s.url)}</td>
-            <td><span class="badge badge-sm badge-ghost">${s.priority}</span></td>
-            <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-outline mr-1">${esc(t)}</span>`).join("")}</td>
-            <td><div class="flex gap-1"><button class="btn btn-ghost btn-xs" data-action="edit" data-id="${s.id}">Edit</button><button class="btn btn-ghost btn-xs text-error" data-action="delete" data-id="${s.id}">Delete</button></div></td>
-          </tr>`).join("")}</tbody>
-      </table></div>`;
+      container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
+        ${sources.map(s => `
+          <li class="list-row flex-wrap items-center gap-3 py-3">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="font-medium">${esc(s.name)}</span>
+              <span class="badge badge-sm badge-soft">${esc(s.source_type)}</span>
+            </div>
+            <div class="list-col-grow flex items-center gap-1 min-w-0">
+              <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="text-sm text-base-content/50 truncate hover:text-primary transition-colors" title="${esc(s.url)}">${esc(getDomain(s.url))}</a>
+              <button class="btn btn-square btn-ghost btn-xs shrink-0" data-action="copy" data-url="${esc(s.url)}" aria-label="Copy URL">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-1">
+              ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
+            </div>
+            <span class="badge badge-sm badge-ghost">${s.priority}</span>
+            <div class="flex gap-1">
+              <a href="/sources/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit source">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+              </a>
+              <button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${s.id}" aria-label="Delete source">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </li>`).join("")}
+      </ul>`;
     }
 
     function esc(str) {
@@ -111,15 +120,14 @@ import Nav from "../components/Nav.astro";
       return d.innerHTML;
     }
 
-    function openForm(source) {
-      editId = source ? source.id : null;
-      document.getElementById("form-title").textContent = source ? "Edit Source" : "Add Source";
-      document.getElementById("modal-save").textContent = source ? "Update" : "Save";
-      document.getElementById("src-name").value = source ? source.name : "";
-      document.getElementById("src-type").value = source ? source.source_type : "rss";
-      document.getElementById("src-url").value = source ? source.url : "";
-      document.getElementById("src-priority").value = source ? String(source.priority) : "2";
-      document.getElementById("src-tags").value = source ? (source.tags || []).join(", ") : "";
+    function openAddForm() {
+      document.getElementById("form-title").textContent = "Add Source";
+      document.getElementById("modal-save").textContent = "Save";
+      document.getElementById("src-name").value = "";
+      document.getElementById("src-type").value = "rss";
+      document.getElementById("src-url").value = "";
+      document.getElementById("src-priority").value = "2";
+      document.getElementById("src-tags").value = "";
       document.getElementById("form-modal").showModal();
     }
 
@@ -127,22 +135,32 @@ import Nav from "../components/Nav.astro";
       const btn = e.target.closest("[data-action]");
       if (!btn) return;
       hideError();
-      const id = btn.dataset.id;
 
       if (btn.dataset.action === "delete") {
+        const id = btn.dataset.id;
         const res = await fetch(`${API}/sources/${id}`, { method: "DELETE" });
         if (!res.ok) { showError("Failed to delete source"); return; }
         load();
-      } else if (btn.dataset.action === "edit") {
-        const res = await fetch(`${API}/sources/${id}`);
-        if (!res.ok) { showError("Failed to load source"); return; }
-        openForm(await res.json());
+      } else if (btn.dataset.action === "copy") {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.url);
+          const svg = btn.querySelector("svg");
+          const original = btn.innerHTML;
+          btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+          btn.classList.add("text-success");
+          setTimeout(() => {
+            btn.innerHTML = original;
+            btn.classList.remove("text-success");
+          }, 1500);
+        } catch {
+          showError("Failed to copy URL");
+        }
       }
     });
 
     document.getElementById("btn-add").addEventListener("click", () => {
       hideError();
-      openForm(null);
+      openAddForm();
     });
 
     document.getElementById("modal-cancel").addEventListener("click", () => {
@@ -166,21 +184,12 @@ import Nav from "../components/Nav.astro";
 
       try {
         const tagList = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
-
-        if (editId) {
-          const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
-          tagList.forEach(t => params.append("tags", t));
-          const res = await fetch(`${API}/sources/${editId}?${params}`, { method: "PATCH" });
-          if (!res.ok) throw new Error(await getErrorMessage(res));
-        } else {
-          const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
-          tagList.forEach(t => params.append("tags", t));
-          const res = await fetch(`${API}/sources?${params}`, { method: "POST" });
-          if (!res.ok) throw new Error(await getErrorMessage(res));
-        }
+        const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
+        tagList.forEach(t => params.append("tags", t));
+        const res = await fetch(`${API}/sources?${params}`, { method: "POST" });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
 
         document.getElementById("form-modal").close();
-        editId = null;
         ["src-name", "src-url", "src-tags"].forEach(id => document.getElementById(id).value = "");
         load();
       } catch (e) {
