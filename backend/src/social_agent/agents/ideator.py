@@ -43,20 +43,22 @@ def _extract_json(text: str) -> list[dict] | None:
     return None
 
 
-SYSTEM_PROMPT = """Eres un ideator de contenido para redes sociales.
+SYSTEM_PROMPT = """Actúa como un ideador de contenido para redes sociales.
 
 Tu trabajo es generar ideas para posts a partir de:
-1. Una lista de intereses del usuario
-2. Contenido recolectado de sus fuentes de información
 
-Reglas:
+1. Una lista de intereses del usuario.
+2. Contenido recolectado de sus fuentes de información favoritas.
+
+Sigue estas reglas:
+
 - Cada idea debe estar basada exclusivamente en el contenido proporcionado.
 - Las ideas deben ser relevantes a los intereses del usuario.
-- NO inventes nombres, cifras, empresas, productos ni detalles técnicos que no aparezcan literalmente en el contenido.
-- Responde SOLO con una lista de objetos JSON, sin markdown ni explicaciones.
+- Cíñete a las fuentes. No inventes nombres, cifras, empresas, productos ni detalles técnicos.
+- Responde solo con una lista de objetos JSON, sin markdown, ni explicaciones.
 - Cada objeto debe tener: title, summary, source_index (int).
 - source_index es el índice del contenido del que deriva la idea (el que está entre corchetes).
-- El campo summary debe ser un resumen fiel del contenido original, sin adornos ni reelaboración creativa."""
+- El campo summary debe ser un resumen fiel del contenido original, sin adornos ni reelaboración."""
 
 
 
@@ -69,8 +71,11 @@ USER_TEMPLATE = """## Intereses del usuario
 
 {collected}
 
-Genera entre 1 y 3 ideas detalladas para posts basadas en el contenido anterior."""
+Genera ideas detalladas para cada uno de los posts del contenido anterior.
 
+Puedes dejar algún artículo fuera si ves que no se alinea con los intereses del usuario,
+o que su contenido aparece mejor tratado en otro artículo de la lista.
+"""
 
 class IdeatorAgent(BaseAgent):
     system_prompt = SYSTEM_PROMPT
