@@ -86,28 +86,32 @@ import Nav from "../components/Nav.astro";
 
       container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
         ${sources.map(s => `
-          <li class="list-row flex-wrap items-center gap-3 py-3">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="font-medium">${esc(s.name)}</span>
-              <span class="badge badge-sm badge-soft">${esc(s.source_type)}</span>
+          <li class="list-row flex-col items-stretch gap-2 py-3">
+            <div class="flex items-center gap-3">
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <span class="font-medium">${esc(s.name)}</span>
+                <span class="badge badge-sm badge-soft shrink-0">${esc(s.source_type)}</span>
+              </div>
+              <span class="badge badge-sm badge-ghost shrink-0">${s.priority}</span>
+              <div class="flex gap-1 shrink-0">
+                <a href="/sources/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit source">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+                </a>
+                <button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${s.id}" aria-label="Delete source">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                </button>
+              </div>
             </div>
-            <div class="list-col-grow flex items-center gap-1 min-w-0">
-              <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="text-sm text-base-content/50 truncate hover:text-primary transition-colors" title="${esc(s.url)}">${esc(getDomain(s.url))}</a>
-              <button class="btn btn-square btn-ghost btn-xs shrink-0" data-action="copy" data-url="${esc(s.url)}" aria-label="Copy URL">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-1">
-              ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
-            </div>
-            <span class="badge badge-sm badge-ghost">${s.priority}</span>
-            <div class="flex gap-1">
-              <a href="/sources/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit source">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-              </a>
-              <button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${s.id}" aria-label="Delete source">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-              </button>
+            <div class="flex items-center gap-3 text-sm text-base-content/50">
+              <div class="flex items-center gap-1 min-w-0 flex-1">
+                <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="truncate hover:text-primary transition-colors" title="${esc(s.url)}">${esc(getDomain(s.url))}</a>
+                <button class="btn btn-square btn-ghost btn-xs shrink-0" data-action="copy" data-url="${esc(s.url)}" aria-label="Copy URL">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
+              </div>
             </div>
           </li>`).join("")}
       </ul>`;

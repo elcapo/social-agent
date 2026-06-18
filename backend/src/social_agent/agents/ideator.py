@@ -54,7 +54,7 @@ Reglas:
 - Las ideas deben ser relevantes a los intereses del usuario.
 - Genera ideas variadas, no repitas el mismo ángulo.
 - Responde SOLO con una lista de objetos JSON, sin markdown ni explicaciones.
-- Cada objeto debe tener: title, summary, tags (lista de strings), source_index (int).
+- Cada objeto debe tener: title, summary, source_index (int).
 - source_index es el índice del contenido del que deriva la idea (el que está entre corchetes).
 - El campo summary debe ser un resumen sustancial de 2-3 párrafos que capture los puntos clave del contenido original."""
 
@@ -127,7 +127,6 @@ class IdeatorAgent(BaseAgent):
                 Seed(
                     title=entry.get("title", "Untitled"),
                     summary=entry.get("summary", ""),
-                    tags=entry.get("tags", []),
                     source_id=src_id,
                     source_url=src_url,
                     status=SeedStatus.pending,

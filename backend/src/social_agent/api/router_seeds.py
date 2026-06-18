@@ -40,7 +40,6 @@ class UpdateSeedRequest(BaseModel):
     status: Optional[str] = None
     title: Optional[str] = None
     summary: Optional[str] = None
-    tags: Optional[list[str]] = None
     source_url: Optional[str] = None
 
 
@@ -141,8 +140,6 @@ def update_seed(seed_id: str, body: UpdateSeedRequest) -> Seed:
         seed.title = body.title
     if body.summary is not None:
         seed.summary = body.summary
-    if body.tags is not None:
-        seed.tags = body.tags
     if body.source_url is not None:
         seed.source_url = body.source_url
 

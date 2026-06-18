@@ -91,7 +91,6 @@ class TestMarkdownStore:
             summary="Full roundtrip test",
             source_id="src_99",
             source_url="https://example.com",
-            tags=["a", "b", "c"],
             status=SeedStatus.used,
         )
         tmp_store.save(original)
@@ -101,6 +100,5 @@ class TestMarkdownStore:
         assert retrieved.summary == original.summary
         assert retrieved.source_id == original.source_id
         assert retrieved.source_url == original.source_url
-        assert retrieved.tags == original.tags
         assert retrieved.status == original.status
         assert retrieved.created_at == original.created_at

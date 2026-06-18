@@ -243,7 +243,6 @@ def seeds_show(seed_id: str) -> None:
     click.echo(f"ID:        {seed.id}")
     click.echo(f"Title:     {seed.title}")
     click.echo(f"Status:    {seed.status.value}")
-    click.echo(f"Tags:      {', '.join(seed.tags)}")
     click.echo(f"Source:    {seed.source_url or seed.source_id or '(none)'}")
     click.echo(f"Summary:   {seed.summary}")
 

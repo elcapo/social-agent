@@ -57,7 +57,7 @@ class TestWriterAgent:
     def test_generate_draft_includes_seed_info_in_prompt(self):
         with patch(RUN_PATH, return_value="content") as mock_run:
             agent = WriterAgent()
-            seed = Seed(title="My Title", summary="My Summary", tags=["a", "b"],
+            seed = Seed(title="My Title", summary="My Summary",
                         source_url="https://example.com/article")
             agent.generate_draft(
                 seed=seed,
@@ -68,7 +68,6 @@ class TestWriterAgent:
             prompt = mock_run.call_args[0][0]
             assert "My Title" in prompt
             assert "My Summary" in prompt
-            assert "a, b" in prompt
             assert "Twitter / X" in prompt
             assert PLATFORM_INSTRUCTIONS in prompt
             assert "https://example.com/article" in prompt
@@ -76,7 +75,7 @@ class TestWriterAgent:
     def test_generate_draft_with_empty_tags(self):
         with patch(RUN_PATH, return_value="content"):
             agent = WriterAgent()
-            seed = Seed(title="No Tags", summary="No tags here", tags=[])
+            seed = Seed(title="No Tags", summary="No tags here")
             draft = agent.generate_draft(
                 seed=seed,
                 platform="twitter",

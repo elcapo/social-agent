@@ -1,0 +1,145 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import Nav from "../../components/Nav.astro";
+---
+
+<Layout title="Edit Seed">
+  <Nav />
+  <main class="max-w-3xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <a href="/seeds" class="link link-hover text-sm text-base-content/50">&larr; Back to seeds</a>
+        <h1 class="text-2xl font-bold mt-1" id="page-title">Edit Seed</h1>
+      </div>
+    </div>
+
+    <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
+    <div id="success-msg" class="alert alert-success mb-4 hidden"></div>
+
+    <div id="loading" class="flex items-center gap-2 py-8">
+      <span class="loading loading-spinner loading-sm"></span>
+      <span class="text-sm text-base-content/40">Loading seed...</span>
+    </div>
+
+    <div id="form-container" class="hidden">
+      <fieldset class="fieldset bg-base-100 border border-base-300 rounded-box p-6">
+        <legend class="fieldset-legend text-xl font-bold">Seed details</legend>
+
+        <label class="label">Title</label>
+        <input type="text" id="seed-title" class="input w-full" placeholder="Seed title" />
+
+        <label class="label">Summary</label>
+        <textarea id="seed-summary" class="textarea w-full" rows="8" placeholder="Idea summary..."></textarea>
+
+        <label class="label">Source URL</label>
+        <input type="url" id="seed-source-url" class="input w-full" placeholder="https://..." />
+      </fieldset>
+
+      <div class="flex gap-3 mt-6">
+        <a href="/seeds" class="btn">Cancel</a>
+        <button class="btn btn-primary" id="btn-save">Save changes</button>
+      </div>
+    </div>
+
+    <div id="not-found" class="hidden">
+      <div class="alert alert-error">Seed not found.</div>
+      <a href="/seeds" class="btn btn-ghost mt-4">&larr; Back to seeds</a>
+    </div>
+  </main>
+
+  <script>
+    const API = "http://localhost:8000/api";
+
+    const params = new URLSearchParams(window.location.search);
+    const seedId = params.get("id");
+
+    const errorEl = document.getElementById("error-msg");
+    const successEl = document.getElementById("success-msg");
+    const loadingEl = document.getElementById("loading");
+    const formContainer = document.getElementById("form-container");
+    const notFoundEl = document.getElementById("not-found");
+
+    function showError(msg) {
+      successEl.classList.add("hidden");
+      errorEl.textContent = msg;
+      errorEl.classList.remove("hidden");
+    }
+
+    function showSuccess(msg) {
+      errorEl.classList.add("hidden");
+      successEl.textContent = msg;
+      successEl.classList.remove("hidden");
+    }
+
+    function hideAll() {
+      errorEl.classList.add("hidden");
+      successEl.classList.add("hidden");
+    }
+
+    async function getErrorMessage(res) {
+      try {
+        const body = await res.json();
+        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
+        return body.detail || "Request failed";
+      } catch { return "Request failed"; }
+    }
+
+    async function load() {
+      if (!seedId) {
+        loadingEl.classList.add("hidden");
+        notFoundEl.classList.remove("hidden");
+        return;
+      }
+
+      const res = await fetch(`${API}/seeds/${seedId}`);
+      if (!res.ok) {
+        loadingEl.classList.add("hidden");
+        notFoundEl.classList.remove("hidden");
+        return;
+      }
+
+      const seed = await res.json();
+      loadingEl.classList.add("hidden");
+      formContainer.classList.remove("hidden");
+
+      document.getElementById("page-title").textContent = `Edit: ${seed.title}`;
+      document.getElementById("seed-title").value = seed.title;
+      document.getElementById("seed-summary").value = seed.summary || "";
+      document.getElementById("seed-source-url").value = seed.source_url || "";
+    }
+
+    document.getElementById("btn-save").addEventListener("click", async () => {
+      const title = document.getElementById("seed-title").value.trim();
+      const summary = document.getElementById("seed-summary").value.trim();
+      const sourceUrl = document.getElementById("seed-source-url").value.trim();
+
+      if (!title) { showError("Title is required."); return; }
+
+      const btn = document.getElementById("btn-save");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+      hideAll();
+
+      try {
+        const body = { title, summary };
+        if (sourceUrl) body.source_url = sourceUrl;
+        const res = await fetch(`${API}/seeds/${seedId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+
+        showSuccess("Seed updated successfully.");
+        btn.textContent = "Saved!";
+        setTimeout(() => { window.location.href = "/seeds"; }, 1000);
+      } catch (e) {
+        showError("Error: " + e.message);
+        btn.disabled = false;
+        btn.textContent = "Save changes";
+      }
+    });
+
+    load();
+  </script>
+</Layout>

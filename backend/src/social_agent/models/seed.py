@@ -23,7 +23,6 @@ class Seed(BaseModel):
     summary: str
     source_id: Optional[str] = None
     source_url: Optional[str] = None
-    tags: list[str] = []
     status: SeedStatus = SeedStatus.pending
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -34,7 +33,6 @@ class Seed(BaseModel):
             "summary": self.summary,
             "source_id": self.source_id,
             "source_url": self.source_url,
-            "tags": self.tags,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
         }

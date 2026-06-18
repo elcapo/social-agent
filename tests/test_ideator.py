@@ -5,13 +5,13 @@ from social_agent.agents.ideator import IdeatorAgent
 from social_agent.collectors.base import CollectedItem
 
 MOCK_SIMPLE = """[
-  {"title": "Idea 1", "summary": "Summary 1", "tags": ["tag1"]},
-  {"title": "Idea 2", "summary": "Summary 2", "tags": ["tag2", "tag3"]}
+  {"title": "Idea 1", "summary": "Summary 1"},
+  {"title": "Idea 2", "summary": "Summary 2"}
 ]"""
 
 MOCK_WITH_SOURCE = """[
-  {"title": "Idea 1", "summary": "Summary 1", "tags": ["tag1"], "source_index": 1},
-  {"title": "Idea 2", "summary": "Summary 2", "tags": ["tag2"], "source_index": 2}
+  {"title": "Idea 1", "summary": "Summary 1", "source_index": 1},
+  {"title": "Idea 2", "summary": "Summary 2", "source_index": 2}
 ]"""
 
 RUN_PATH = "social_agent.agents.ideator.IdeatorAgent.run"
@@ -45,7 +45,6 @@ class TestIdeatorAgent:
             assert len(seeds) == 2
             assert seeds[0].title == "Idea 1"
             assert seeds[0].summary == "Summary 1"
-            assert seeds[0].tags == ["tag1"]
             assert seeds[0].status.value == "pending"
 
     def test_generate_seeds_with_real_items(self):

@@ -30,28 +30,6 @@ import Nav from "../components/Nav.astro";
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
-  <dialog id="edit-modal" class="modal">
-    <div class="modal-box">
-      <input type="hidden" id="edit-id" />
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Edit Seed</legend>
-        <label class="label">Title</label>
-        <input type="text" id="edit-title" class="input w-full" />
-        <label class="label">Summary</label>
-        <textarea id="edit-summary" class="textarea w-full" rows="8"></textarea>
-        <label class="label">Source URL</label>
-        <input type="text" id="edit-source-url" class="input w-full" placeholder="https://..." />
-        <label class="label">Tags (comma-separated)</label>
-        <input type="text" id="edit-tags" class="input w-full" placeholder="tech, python" />
-      </fieldset>
-      <div class="modal-action">
-        <button class="btn" id="edit-cancel">Cancel</button>
-        <button class="btn btn-primary" id="edit-save">Save</button>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
-  </dialog>
-
   <script>
     const API = "http://localhost:8000/api";
 
@@ -85,29 +63,30 @@ import Nav from "../components/Nav.astro";
         return;
       }
 
-      container.innerHTML = `<div class="overflow-x-auto"><table class="table table-zinc">
-        <thead>
-          <tr>
-            <th>Title</th>
-            <th>Source</th>
-            <th>Tags</th>
-            <th>Status</th>
-            <th>Created</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>${seeds.map(s => `
-          <tr>
-            <td><div class="font-medium">${esc(s.title)}</div><div class="text-xs text-base-content/40">${esc(s.summary)}</div></td>
-            <td><span class="text-xs text-base-content/50 max-w-[120px] inline-block truncate" title="${esc(s.source_url || "")}">${s.source_url ? esc(s.source_url.replace(/^https?:\/\//, "")) : "—"}</span></td>
-            <td>${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary mr-1">${esc(t)}</span>`).join("")}</td>
-            <td><span class="badge badge-sm badge-soft ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span></td>
-            <td class="text-sm text-base-content/40">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</td>
-            <td>${s.status === "pending"
-              ? `<div class="flex gap-1"><button class="btn btn-ghost btn-xs" data-action="edit" data-id="${s.id}">Edit</button><button class="btn btn-ghost btn-xs text-error" data-action="discard" data-id="${s.id}">Discard</button></div>`
-              : `<span class="text-base-content/20">—</span>`}</td>
-          </tr>`).join("")}</tbody>
-      </table></div>`;
+      container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
+        ${seeds.map(s => {
+          const domain = s.source_url ? (() => { try { return new URL(s.source_url).hostname; } catch { return s.source_url; } })() : null;
+          return `
+          <li class="list-row items-center gap-3 py-3">
+            <div class="min-w-0 flex-1 max-w-[75%]">
+              <div class="font-medium">${esc(s.title)}</div>
+              <div class="text-xs text-base-content/40 mb-1">${esc(s.summary)}</div>
+              ${s.source_url
+                ? `<div class="flex items-center gap-1 text-sm text-base-content/50">
+                    <a href="${esc(s.source_url)}" target="_blank" rel="noopener noreferrer" class="truncate max-w-[200px] hover:text-primary transition-colors" title="${esc(s.source_url)}">${esc(domain)}</a>
+                    <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${esc(s.source_url)}" aria-label="Copy URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                  </div>`
+                : ''}
+            </div>
+            <div class="flex items-center gap-2 shrink-0 ml-auto">
+              <span class="badge badge-md badge-soft whitespace-nowrap ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span>
+              <span class="text-sm text-base-content/40 whitespace-nowrap">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</span>
+              <div class="flex gap-1">${s.status === "pending"
+                ? `<a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a><button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${s.id}" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`
+                : `<a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Edit seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a><button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}</div>
+            </div>
+          </li>`}).join("")}
+      </ul>`;
     }
 
     function esc(str) {
@@ -132,56 +111,22 @@ import Nav from "../components/Nav.astro";
           });
           if (!res.ok) throw new Error(await getErrorMessage(res));
           load();
-        } else if (btn.dataset.action === "edit") {
-          const res = await fetch(`${API}/seeds/${id}`);
-          if (!res.ok) throw new Error(await getErrorMessage(res));
-          const seed = await res.json();
-          document.getElementById("edit-id").value = seed.id;
-          document.getElementById("edit-title").value = seed.title;
-          document.getElementById("edit-summary").value = seed.summary;
-          document.getElementById("edit-source-url").value = seed.source_url || "";
-          document.getElementById("edit-tags").value = (seed.tags || []).join(", ");
-          document.getElementById("edit-modal").showModal();
+        } else if (btn.dataset.action === "copy-url") {
+          try {
+            await navigator.clipboard.writeText(btn.dataset.url);
+            const original = btn.innerHTML;
+            btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            btn.classList.add("text-success");
+            setTimeout(() => {
+              btn.innerHTML = original;
+              btn.classList.remove("text-success");
+            }, 1500);
+          } catch {
+            showError("Failed to copy URL");
+          }
         }
       } catch (e) {
         showError("Error: " + e.message);
-      }
-    });
-
-    document.getElementById("edit-cancel").addEventListener("click", () => {
-      document.getElementById("edit-modal").close();
-    });
-
-    document.getElementById("edit-save").addEventListener("click", async () => {
-      const id = document.getElementById("edit-id").value;
-      const title = document.getElementById("edit-title").value.trim();
-      const summary = document.getElementById("edit-summary").value.trim();
-      const sourceUrl = document.getElementById("edit-source-url").value.trim();
-      const tagsStr = document.getElementById("edit-tags").value.trim();
-      if (!title) { showError("Title is required."); return; }
-
-      const btn = document.getElementById("edit-save");
-      btn.disabled = true;
-      btn.textContent = "Saving...";
-      hideError();
-
-      try {
-        const tags = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
-        const body = { title, summary, tags };
-        if (sourceUrl) body.source_url = sourceUrl;
-        const res = await fetch(`${API}/seeds/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) throw new Error(await getErrorMessage(res));
-        document.getElementById("edit-modal").close();
-        load();
-      } catch (e) {
-        showError("Error: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Save";
       }
     });
 

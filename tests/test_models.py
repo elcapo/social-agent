@@ -57,7 +57,6 @@ class TestSeed:
         assert restored.summary == seed.summary
         assert restored.source_id == seed.source_id
         assert restored.status == seed.status
-        assert restored.tags == seed.tags
 
     def test_seed_default_status(self):
         seed = Seed(title="New", summary="New idea")
