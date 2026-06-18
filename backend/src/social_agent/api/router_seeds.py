@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from social_agent.agents.ideator import IdeatorAgent
 from social_agent.collectors.base import CollectedItem
+from social_agent.collectors.link_scraper import LinkScraperCollector
 from social_agent.collectors.rss import RSSCollector
 from social_agent.collectors.scraper import WebScraperCollector
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
@@ -49,6 +50,8 @@ def _build_collector(source: Source):
             return RSSCollector(source.id, source.name, source.url, source.tags)
         case SourceType.webpage:
             return WebScraperCollector(source.id, source.name, source.url, source.tags)
+        case SourceType.link_scraper:
+            return LinkScraperCollector(source.id, source.name, source.url, source.tags, config=source.config)
         case SourceType.social:
             if "twitter" in source.url:
                 return TwitterCollector(
@@ -71,7 +74,9 @@ def list_seeds(status: Optional[str] = None) -> list[Seed]:
         if status and s.status.value != status:
             return False
         return True
-    return seed_store.list(filter_fn=_filter)
+    items = seed_store.list(filter_fn=_filter)
+    items.sort(key=lambda s: s.created_at or "", reverse=True)
+    return items
 
 
 @router.get("/seeds/{seed_id}")

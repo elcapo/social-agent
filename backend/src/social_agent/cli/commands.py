@@ -7,7 +7,7 @@ import frontmatter
 
 from social_agent.agents.ideator import IdeatorAgent
 from social_agent.agents.writer import WriterAgent
-from social_agent.collectors import RSSCollector, WebScraperCollector
+from social_agent.collectors import LinkScraperCollector, RSSCollector, WebScraperCollector
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
 from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
@@ -91,16 +91,21 @@ def sources_list() -> None:
 @click.argument("url")
 @click.option("--priority", default=2, type=int, help="Priority 1 (high) to 3 (low)")
 @click.option("--tags", default="", help="Comma-separated tags")
-def sources_add(name: str, source_type: str, url: str, priority: int, tags: str) -> None:
+@click.option("--config", default="", help='JSON config (e.g. \'{"url_pattern":"/blog/.+","max_items":5}\')')
+def sources_add(name: str, source_type: str, url: str, priority: int, tags: str, config: str) -> None:
     """Add a new information source."""
+    import json
+
     from social_agent.models.source import SourcePriority, SourceType
 
+    parsed_config = json.loads(config) if config else {}
     source = Source(
         name=name,
         source_type=SourceType(source_type),
         url=url,
         priority=SourcePriority(priority),
         tags=[t.strip() for t in tags.split(",") if t.strip()],
+        config=parsed_config,
     )
     path = source_store.save(source)
     click.echo(f"Source added: {source.id}")
@@ -121,6 +126,8 @@ def _build_collector(source: Source):
             return RSSCollector(source.id, source.name, source.url, source.tags)
         case SourceType.webpage:
             return WebScraperCollector(source.id, source.name, source.url, source.tags)
+        case SourceType.link_scraper:
+            return LinkScraperCollector(source.id, source.name, source.url, source.tags, config=source.config)
         case SourceType.social:
             if "twitter" in source.url:
                 return TwitterCollector(
@@ -186,6 +193,9 @@ def seeds_generate(
             items = collector.fetch()
             all_items.extend(items)
             click.echo(f"  -> {len(items)} items")
+            for it in items:
+                preview = it.content[:120].replace("\n", " ")
+                click.echo(f"      [{len(it.content):4d}c] {preview}...")
         except Exception as e:
             click.echo(f"  -> Error: {e}")
 

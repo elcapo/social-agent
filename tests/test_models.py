@@ -34,6 +34,37 @@ class TestSource:
         src = Source(name="Test", source_type=SourceType.webpage, url="https://example.com")
         assert src.id.startswith("src_")
 
+    def test_source_with_config(self):
+        src = Source(
+            name="Blog",
+            source_type=SourceType.link_scraper,
+            url="https://example.com/blog",
+            config={"url_pattern": "/blog/.+", "max_items": 5},
+        )
+        assert src.config["url_pattern"] == "/blog/.+"
+        assert src.config["max_items"] == 5
+
+    def test_source_config_roundtrip(self):
+        src = Source(
+            name="Blog",
+            source_type=SourceType.link_scraper,
+            url="https://example.com/blog",
+            config={"url_pattern": "/blog/.+", "full_content": False},
+        )
+        fm = src.to_frontmatter()
+        restored = Source.from_frontmatter(fm)
+        assert restored.config == src.config
+        assert restored.source_type == SourceType.link_scraper
+
+    def test_source_config_defaults_to_empty_dict(self):
+        src = Source(name="No Config", source_type=SourceType.rss, url="https://example.com/rss")
+        assert src.config == {}
+
+    def test_source_link_scraper_type(self):
+        src = Source(name="LS", source_type=SourceType.link_scraper, url="https://example.com")
+        assert src.source_type == SourceType.link_scraper
+        assert src.source_type.value == "link_scraper"
+
 
 class TestSeed:
     def test_create_seed(self):

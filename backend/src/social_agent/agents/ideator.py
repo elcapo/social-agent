@@ -50,13 +50,13 @@ Tu trabajo es generar ideas para posts a partir de:
 2. Contenido recolectado de sus fuentes de información
 
 Reglas:
-- Cada idea debe estar directamente conectada al contenido proporcionado.
+- Cada idea debe estar basada exclusivamente en el contenido proporcionado.
 - Las ideas deben ser relevantes a los intereses del usuario.
-- Genera ideas variadas, no repitas el mismo ángulo.
+- NO inventes nombres, cifras, empresas, productos ni detalles técnicos que no aparezcan literalmente en el contenido.
 - Responde SOLO con una lista de objetos JSON, sin markdown ni explicaciones.
 - Cada objeto debe tener: title, summary, source_index (int).
 - source_index es el índice del contenido del que deriva la idea (el que está entre corchetes).
-- El campo summary debe ser un resumen sustancial de 2-3 párrafos que capture los puntos clave del contenido original."""
+- El campo summary debe ser un resumen fiel del contenido original, sin adornos ni reelaboración creativa."""
 
 
 
@@ -92,7 +92,7 @@ class IdeatorAgent(BaseAgent):
             return (
                 f"--- [{idx}] {item.title} ({item.source_name}) ---\n"
                 f"URL: {item.url}\n"
-                f"{item.content[:1500]}"
+                f"{item.content[:4000]}"
             )
 
         collected_text = "\n\n".join(

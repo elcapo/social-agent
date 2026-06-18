@@ -15,6 +15,7 @@ class SourceType(str, Enum):
     rss = "rss"
     webpage = "webpage"
     social = "social"
+    link_scraper = "link_scraper"
     manual = "manual"
 
 
@@ -31,6 +32,7 @@ class Source(BaseModel):
     url: str
     priority: SourcePriority = SourcePriority.medium
     tags: list[str] = []
+    config: dict = Field(default_factory=dict)
     enabled: bool = True
     created_at: datetime = Field(default_factory=_utcnow)
     last_fetched: Optional[datetime] = None
@@ -43,6 +45,7 @@ class Source(BaseModel):
             "url": self.url,
             "priority": self.priority.value,
             "tags": self.tags,
+            "config": self.config,
             "enabled": self.enabled,
             "created_at": self.created_at.isoformat(),
             "last_fetched": self.last_fetched.isoformat() if self.last_fetched else None,

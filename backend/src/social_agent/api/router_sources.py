@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -30,8 +31,10 @@ def create_source(
     url: str,
     priority: SourcePriority = SourcePriority.medium,
     tags: list[str] = Query([]),
+    config: Optional[str] = Query(None),
 ) -> Source:
-    source = Source(name=name, source_type=source_type, url=url, priority=priority, tags=tags)
+    parsed_config = json.loads(config) if config else {}
+    source = Source(name=name, source_type=source_type, url=url, priority=priority, tags=tags, config=parsed_config)
     source_store.save(source)
     return source
 
@@ -52,6 +55,7 @@ def update_source(
     url: Optional[str] = None,
     priority: Optional[SourcePriority] = None,
     tags: Optional[list[str]] = Query(None),
+    config: Optional[str] = Query(None),
     enabled: Optional[bool] = None,
 ) -> Source:
     source = source_store.get(source_id)
@@ -68,6 +72,8 @@ def update_source(
         source.priority = priority
     if tags is not None:
         source.tags = tags
+    if config is not None:
+        source.config = json.loads(config)
     if enabled is not None:
         source.enabled = enabled
 

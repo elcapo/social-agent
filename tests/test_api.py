@@ -117,6 +117,44 @@ class TestSourcesAPI:
         resp = client.delete("/api/sources/nonexistent")
         assert resp.status_code == 404
 
+    def test_create_source_with_config(self, client):
+        resp = client.post("/api/sources", params={
+            "name": "Blog",
+            "source_type": "link_scraper",
+            "url": "https://example.com/blog",
+            "config": '{"url_pattern": "/blog/.+", "max_items": 5}',
+        })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["source_type"] == "link_scraper"
+        assert data["config"] == {"url_pattern": "/blog/.+", "max_items": 5}
+
+    def test_create_source_config_defaults_to_empty(self, client):
+        resp = client.post("/api/sources", params={
+            "name": "No Config",
+            "source_type": "rss",
+            "url": "https://example.com/rss",
+        })
+        assert resp.status_code == 201
+        assert resp.json()["config"] == {}
+
+    def test_update_source_config(self, client):
+        src = _create_test_source(client)
+        resp = client.patch(f"/api/sources/{src['id']}", params={
+            "config": '{"full_content": false}',
+        })
+        assert resp.status_code == 200
+        assert resp.json()["config"] == {"full_content": False}
+
+    def test_create_source_with_link_scraper_type(self, client):
+        resp = client.post("/api/sources", params={
+            "name": "LS Blog",
+            "source_type": "link_scraper",
+            "url": "https://example.com/blog",
+        })
+        assert resp.status_code == 201
+        assert resp.json()["source_type"] == "link_scraper"
+
 
 # ── Seeds ──
 

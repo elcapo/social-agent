@@ -25,6 +25,7 @@ import Nav from "../components/Nav.astro";
         <select id="src-type" class="select w-full">
           <option value="rss">RSS</option>
           <option value="webpage">Webpage</option>
+          <option value="link_scraper">Link Scraper</option>
           <option value="social">Social</option>
           <option value="manual">Manual</option>
         </select>
@@ -38,6 +39,10 @@ import Nav from "../components/Nav.astro";
         </select>
         <label class="label">Tags (comma-separated)</label>
         <input type="text" id="src-tags" class="input w-full" placeholder="tech, python" />
+        <div id="config-field" class="hidden">
+          <label class="label">Config (JSON)</label>
+          <textarea id="src-config" class="textarea w-full font-mono text-sm" rows="3" placeholder='{"url_pattern": "/blog/.+", "max_items": 10}'></textarea>
+        </div>
       </fieldset>
       <div class="modal-action">
         <button class="btn" id="modal-cancel">Cancel</button>
@@ -132,8 +137,17 @@ import Nav from "../components/Nav.astro";
       document.getElementById("src-url").value = "";
       document.getElementById("src-priority").value = "2";
       document.getElementById("src-tags").value = "";
+      document.getElementById("src-config").value = "";
+      toggleConfigField();
       document.getElementById("form-modal").showModal();
     }
+
+    function toggleConfigField() {
+      const type = document.getElementById("src-type").value;
+      document.getElementById("config-field").classList.toggle("hidden", type !== "link_scraper");
+    }
+
+    document.getElementById("src-type").addEventListener("change", toggleConfigField);
 
     document.getElementById("sources-list").addEventListener("click", async (e) => {
       const btn = e.target.closest("[data-action]");
@@ -190,6 +204,11 @@ import Nav from "../components/Nav.astro";
         const tagList = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
         const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
         tagList.forEach(t => params.append("tags", t));
+        const configVal = document.getElementById("src-config").value.trim();
+        if (configVal) {
+          try { JSON.parse(configVal); params.append("config", configVal); }
+          catch { showError("Config is not valid JSON."); btn.disabled = false; btn.textContent = original; return; }
+        }
         const res = await fetch(`${API}/sources?${params}`, { method: "POST" });
         if (!res.ok) throw new Error(await getErrorMessage(res));
 
