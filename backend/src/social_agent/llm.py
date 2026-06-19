@@ -14,6 +14,7 @@ def llm_complete(
     temperature: float = 0.7,
     max_tokens: int | None = None,
     raw: bool = False,
+    response_format: Optional[dict] = None,
 ) -> str:
     model = model or settings.llm_provider
     kwargs: dict = {
@@ -30,14 +31,12 @@ def llm_complete(
         kwargs["api_key"] = settings.llm_api_key
     if settings.llm_base_url:
         kwargs["api_base"] = settings.llm_base_url
+    if response_format is not None:
+        kwargs["response_format"] = response_format
 
     response = litellm_completion(**kwargs)
     msg = response.choices[0].message
 
     content = msg.content or ""
-    reasoning = getattr(msg, "reasoning_content", None) or ""
-
-    if not content and reasoning:
-        content = reasoning
 
     return response if raw else content
