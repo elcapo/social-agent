@@ -33,6 +33,7 @@ class Draft(BaseModel):
     media_paths: list[str] = []
     created_at: datetime = Field(default_factory=_utcnow)
     published_at: Optional[datetime] = None
+    scheduled_at: Optional[datetime] = None
 
     def to_frontmatter(self) -> dict:
         fm = {
@@ -50,6 +51,8 @@ class Draft(BaseModel):
         }
         if self.published_at:
             fm["published_at"] = self.published_at.isoformat()
+        if self.scheduled_at:
+            fm["scheduled_at"] = self.scheduled_at.isoformat()
         return fm
 
     @classmethod
@@ -59,6 +62,8 @@ class Draft(BaseModel):
             data["created_at"] = datetime.fromisoformat(data["created_at"])
         if data.get("published_at"):
             data["published_at"] = datetime.fromisoformat(data["published_at"])
+        if data.get("scheduled_at"):
+            data["scheduled_at"] = datetime.fromisoformat(data["scheduled_at"])
         if not data.get("media_urls"):
             data["media_urls"] = []
         if not data.get("media_paths"):

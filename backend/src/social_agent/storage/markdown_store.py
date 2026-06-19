@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Generic, Optional, TypeVar
 
@@ -98,3 +98,31 @@ class MarkdownStore(Generic[T]):
         if not self.directory.exists():
             return 0
         return len(list(self.directory.glob("*.md")))
+
+    def list_scheduled(
+        self,
+        since: Optional[datetime] = None,
+        status_value: str = "draft",
+    ) -> list[T]:
+        """Return items with a populated ``scheduled_at`` that is due.
+
+        An item is due when ``scheduled_at`` is not None and ``scheduled_at <= since``
+        (``since`` defaults to now in UTC). Items whose ``status`` value does not
+        match ``status_value`` (default ``"draft"``) are excluded so already
+        published/failed drafts are not re-published.
+        """
+        cutoff = since if since is not None else datetime.now(timezone.utc)
+
+        def _due(item: T) -> bool:
+            scheduled = getattr(item, "scheduled_at", None)
+            if scheduled is None:
+                return False
+            status = getattr(item, "status", None)
+            status_val = status.value if hasattr(status, "value") else status
+            if status_val != status_value:
+                return False
+            if scheduled.tzinfo is None:
+                scheduled = scheduled.replace(tzinfo=timezone.utc)
+            return scheduled <= cutoff
+
+        return self.list(filter_fn=_due)

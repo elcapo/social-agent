@@ -175,6 +175,15 @@ Actualmente los publishers publican de forma inmediata al invocar el comando o e
 - Tests para los nuevos endpoints de scheduler
 - Tests del comando CLI `schedule`
 
+### Fase 10 — Programación de publicaciones
+- [x] Extender modelo `Draft` con `scheduled_at: datetime | None` + serialización ISO 8601
+- [x] `MarkdownStore.list_scheduled(since, status_value)` para drafts due
+- [x] Módulo `scheduler.py` con `run_once()` y `run_loop()` (worker async)
+- [x] Comandos CLI `schedule set/list/cancel/publish/worker`
+- [x] Endpoints API: `GET /api/drafts/scheduled`, `POST /api/drafts/{id}/schedule`, `POST /api/drafts/{id}/unschedule`, `POST /api/scheduler/run`
+- [x] Frontend: indicador de calendario en lista de drafts, campo datetime en edición, sección "Scheduled Drafts" en dashboard con botón "Run scheduler"
+- [x] Tests — 225 tests, todos pasan (45 nuevos)
+
 ## Fase 11 — Migración a base de datos (SQLite + patrón repositorio)
 
 ### Contexto

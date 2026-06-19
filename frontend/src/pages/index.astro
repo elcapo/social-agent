@@ -45,17 +45,28 @@ import Nav from "../components/Nav.astro";
         </div>
       </section>
     </div>
+
+    <section class="card bg-base-100 border border-base-300 shadow-sm mt-6">
+      <div class="card-body p-5">
+        <div class="flex items-center justify-between">
+          <h2 class="card-title text-sm uppercase tracking-wider text-base-content/60">Scheduled Drafts</h2>
+          <button class="btn btn-xs btn-outline" id="btn-run-scheduler">Run scheduler</button>
+        </div>
+        <div id="scheduled-drafts"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
+      </div>
+    </section>
   </main>
 
   <script>
     const API = "http://localhost:8000/api";
 
     async function load() {
-      const [sources, seeds, ideas, drafts] = await Promise.all([
+      const [sources, seeds, ideas, drafts, scheduled] = await Promise.all([
         fetch(`${API}/sources`).then(r => r.json()),
         fetch(`${API}/seeds`).then(r => r.json()),
         fetch(`${API}/ideas`).then(r => r.json()),
         fetch(`${API}/drafts`).then(r => r.json()),
+        fetch(`${API}/drafts/scheduled`).then(r => r.json()).catch(() => []),
       ]);
 
       const published = drafts.filter(d => d.status === "published");
@@ -95,7 +106,39 @@ import Nav from "../components/Nav.astro";
             </a>`;
           }).join("")}</div>`
           : '<div class="alert bg-base-200 text-sm">No drafts yet.</div>';
+
+      const sortedScheduled = (scheduled || []).slice().sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+      document.getElementById("scheduled-drafts").innerHTML =
+        sortedScheduled.length
+          ? `<div class="divide-y divide-base-200">${sortedScheduled.map(d => {
+            const preview = d.content ? d.content.substring(0, 60) + (d.content.length > 60 ? "…" : "") : "(empty)";
+            const due = new Date(d.scheduled_at) <= new Date();
+            return `
+            <a href="/drafts/edit?id=${d.id}" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150">
+              <div class="min-w-0">
+                <div class="font-semibold text-sm truncate">${esc(preview)}</div>
+                <div class="text-xs text-base-content/40">${esc(d.platform)}</div>
+              </div>
+              <span class="badge badge-sm badge-soft ${due ? "badge-warning" : "badge-secondary"} whitespace-nowrap" title="${esc(d.scheduled_at)}">${new Date(d.scheduled_at).toLocaleString()}</span>
+            </a>`;
+          }).join("")}</div>`
+          : '<div class="alert bg-base-200 text-sm">No scheduled drafts.</div>';
     }
+
+    document.getElementById("btn-run-scheduler").addEventListener("click", async () => {
+      const btn = document.getElementById("btn-run-scheduler");
+      btn.disabled = true;
+      btn.textContent = "Running...";
+      try {
+        const res = await fetch(`${API}/scheduler/run`, { method: "POST" });
+        if (!res.ok) throw new Error("Scheduler failed");
+        await load();
+      } catch {
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Run scheduler";
+      }
+    });
 
     function esc(str) {
       if (!str) return "";

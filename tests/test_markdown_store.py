@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from social_agent.models.draft import Draft
+from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.idea import Idea
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.storage.markdown_store import MarkdownStore
@@ -159,3 +160,79 @@ class TestMarkdownStoreDraftContent:
             assert retrieved.platform == "twitter"
         finally:
             store.delete(draft.id)
+
+
+class TestMarkdownStoreListScheduled:
+    @pytest.fixture
+    def tmp_draft_store(self, tmp_path: Path) -> MarkdownStore[Draft]:
+        return MarkdownStore[Draft](tmp_path / "drafts", Draft)
+
+    def test_list_scheduled_empty(self, tmp_draft_store):
+        assert tmp_draft_store.list_scheduled() == []
+
+    def test_list_scheduled_returns_due_draft(self, tmp_draft_store):
+        due = Draft(
+            idea_id="i1", platform="twitter", content="due",
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        tmp_draft_store.save(due)
+        result = tmp_draft_store.list_scheduled()
+        assert len(result) == 1
+        assert result[0].id == due.id
+
+    def test_list_scheduled_excludes_future(self, tmp_draft_store):
+        future = Draft(
+            idea_id="i1", platform="twitter", content="future",
+            scheduled_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+        tmp_draft_store.save(future)
+        assert tmp_draft_store.list_scheduled() == []
+
+    def test_list_scheduled_excludes_unscheduled(self, tmp_draft_store):
+        plain = Draft(idea_id="i1", platform="twitter", content="plain")
+        tmp_draft_store.save(plain)
+        assert tmp_draft_store.list_scheduled() == []
+
+    def test_list_scheduled_excludes_non_draft_status(self, tmp_draft_store):
+        published = Draft(
+            idea_id="i1", platform="twitter", content="done",
+            status=DraftStatus.published,
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        tmp_draft_store.save(published)
+        assert tmp_draft_store.list_scheduled() == []
+
+    def test_list_scheduled_with_explicit_since(self, tmp_draft_store):
+        cutoff = datetime(2026, 6, 19, 12, 0, tzinfo=timezone.utc)
+        before = Draft(
+            idea_id="i1", platform="twitter", content="before",
+            scheduled_at=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc),
+        )
+        after = Draft(
+            idea_id="i2", platform="twitter", content="after",
+            scheduled_at=datetime(2026, 6, 19, 14, 0, tzinfo=timezone.utc),
+        )
+        tmp_draft_store.save(before)
+        tmp_draft_store.save(after)
+        result = tmp_draft_store.list_scheduled(since=cutoff)
+        assert [d.id for d in result] == [before.id]
+
+    def test_list_scheduled_handles_naive_datetime(self, tmp_draft_store):
+        naive_due = Draft(
+            idea_id="i1", platform="twitter", content="naive",
+            scheduled_at=datetime(2020, 1, 1, 0, 0),
+        )
+        tmp_draft_store.save(naive_due)
+        result = tmp_draft_store.list_scheduled()
+        assert len(result) == 1
+        assert result[0].id == naive_due.id
+
+    def test_list_scheduled_roundtrips_through_disk(self, tmp_draft_store):
+        due = Draft(
+            idea_id="i1", platform="twitter", content="persisted",
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        tmp_draft_store.save(due)
+        result = tmp_draft_store.list_scheduled()
+        assert len(result) == 1
+        assert result[0].scheduled_at == due.scheduled_at

@@ -53,6 +53,14 @@ import Nav from "../../components/Nav.astro";
           <input type="file" id="draft-media-file" accept="image/*" class="file-input file-input-bordered w-full" />
         </div>
 
+        <label class="label">Schedule</label>
+        <div id="draft-schedule-display" class="text-sm text-base-content/60 mb-2"></div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input type="datetime-local" id="draft-scheduled-at" class="input input-sm w-auto" />
+          <button class="btn btn-sm btn-primary" id="btn-schedule">Set schedule</button>
+          <button class="btn btn-sm btn-ghost" id="btn-unschedule">Remove schedule</button>
+        </div>
+
         <label class="label">Notes</label>
         <div id="draft-notes" class="text-sm text-base-content/60"></div>
 
@@ -88,6 +96,9 @@ import Nav from "../../components/Nav.astro";
     const readonlyMsg = document.getElementById("readonly-msg");
     const btnSave = document.getElementById("btn-save");
     const btnUpload = document.getElementById("btn-upload-file");
+    const btnSchedule = document.getElementById("btn-schedule");
+    const btnUnschedule = document.getElementById("btn-unschedule");
+    const scheduleInput = document.getElementById("draft-scheduled-at");
     const uploadSection = document.getElementById("draft-upload-section");
     const editableInputs = ["draft-content", "draft-media-urls"].map(id => document.getElementById(id));
 
@@ -155,6 +166,28 @@ import Nav from "../../components/Nav.astro";
       ).join("");
     }
 
+    function toLocalInputValue(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return "";
+      const pad = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function updateScheduleDisplay(scheduledAt, status) {
+      const display = document.getElementById("draft-schedule-display");
+      const published = status === "published";
+      if (scheduledAt) {
+        display.innerHTML = `<span class="badge badge-sm badge-soft badge-secondary"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${new Date(scheduledAt).toLocaleString()}</span>`;
+      } else {
+        display.innerHTML = '<span class="text-base-content/40">Not scheduled</span>';
+      }
+      scheduleInput.value = toLocalInputValue(scheduledAt);
+      scheduleInput.disabled = published;
+      btnSchedule.disabled = published;
+      btnUnschedule.disabled = published || !scheduledAt;
+    }
+
     async function load() {
       if (!draftId) {
         loadingEl.classList.add("hidden");
@@ -180,6 +213,7 @@ import Nav from "../../components/Nav.astro";
       document.getElementById("draft-content").value = draft.content;
       document.getElementById("draft-media-urls").value = (draft.media_urls || []).join("\n");
       updateMediaPathsDisplay(draft.media_paths);
+      updateScheduleDisplay(draft.scheduled_at, draft.status);
       document.getElementById("draft-notes").textContent = draft.notes || "—";
       document.getElementById("draft-created").textContent = draft.created_at ? new Date(draft.created_at).toLocaleString() : "—";
 
@@ -216,6 +250,50 @@ import Nav from "../../components/Nav.astro";
       } finally {
         btnUpload.disabled = false;
         btnUpload.textContent = "Upload file";
+      }
+    });
+
+    btnSchedule.addEventListener("click", async () => {
+      const raw = scheduleInput.value;
+      if (!raw) { showError("Pick a date and time first."); return; }
+      const iso = new Date(raw).toISOString();
+
+      btnSchedule.disabled = true;
+      btnSchedule.textContent = "Scheduling...";
+      hideAll();
+
+      try {
+        const res = await fetch(`${API}/drafts/${draftId}/schedule`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scheduled_at: iso }),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        showSuccess("Draft scheduled.");
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btnSchedule.disabled = false;
+        btnSchedule.textContent = "Set schedule";
+      }
+    });
+
+    btnUnschedule.addEventListener("click", async () => {
+      btnUnschedule.disabled = true;
+      btnUnschedule.textContent = "Removing...";
+      hideAll();
+
+      try {
+        const res = await fetch(`${API}/drafts/${draftId}/unschedule`, { method: "POST" });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        showSuccess("Schedule removed.");
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btnUnschedule.disabled = false;
+        btnUnschedule.textContent = "Remove schedule";
       }
     });
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import click
@@ -600,6 +601,108 @@ def drafts_publish(draft_id: str, media_url: tuple[str, ...], media_path: tuple[
         draft.publish_error = result.error
         draft_store.save(draft)
         click.echo(f"Failed to publish draft '{draft_id}': {result.error}")
+
+
+# ── Schedule ──
+
+
+@cli.group()
+def schedule() -> None:
+    """Schedule drafts for future publishing."""
+
+
+def _parse_scheduled_at(raw: str) -> datetime:
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        raise click.BadParameter(
+            "Invalid datetime format. Use ISO 8601, e.g. '2026-06-20T15:30:00' "
+            "(optionally with timezone)."
+        )
+
+
+@schedule.command("set")
+@click.argument("draft_id")
+@click.argument("scheduled_at")
+def schedule_set(draft_id: str, scheduled_at: str) -> None:
+    """Set a publication time for a draft (ISO 8601 datetime)."""
+    draft = draft_store.get(draft_id)
+    if not draft:
+        click.echo(f"Draft '{draft_id}' not found.")
+        return
+    if draft.status == DraftStatus.published:
+        click.echo("Cannot schedule a draft that is already published.")
+        return
+
+    when = _parse_scheduled_at(scheduled_at)
+    draft.scheduled_at = when
+    draft.status = DraftStatus.draft
+    draft_store.save(draft)
+    click.echo(f"Draft '{draft_id}' scheduled for {when.isoformat()}.")
+
+
+@schedule.command("list")
+def schedule_list() -> None:
+    """List scheduled drafts."""
+    items = [d for d in draft_store.list() if d.scheduled_at is not None]
+    if not items:
+        click.echo("No scheduled drafts.")
+        return
+    items.sort(key=lambda d: d.scheduled_at)
+    for d in items:
+        click.echo(f"  [{d.id}] ({d.platform}) {d.status.value} -> {d.scheduled_at.isoformat()}")
+
+
+@schedule.command("cancel")
+@click.argument("draft_id")
+def schedule_cancel(draft_id: str) -> None:
+    """Remove the schedule from a draft."""
+    draft = draft_store.get(draft_id)
+    if not draft:
+        click.echo(f"Draft '{draft_id}' not found.")
+        return
+    if draft.scheduled_at is None:
+        click.echo(f"Draft '{draft_id}' is not scheduled.")
+        return
+    draft.scheduled_at = None
+    draft_store.save(draft)
+    click.echo(f"Schedule cancelled for draft '{draft_id}'.")
+
+
+@schedule.command("publish")
+def schedule_publish() -> None:
+    """Publish all drafts whose scheduled time has arrived."""
+    from social_agent.scheduler import run_once
+
+    results = run_once(draft_store)
+    if not results:
+        click.echo("No drafts due for publishing.")
+        return
+    published = 0
+    failed = 0
+    for r in results:
+        if r.success:
+            published += 1
+            click.echo(f"  Published: {r.draft_id} ({r.platform}) -> {r.platform_post_id}")
+        else:
+            failed += 1
+            click.echo(f"  Failed:    {r.draft_id} ({r.platform}) -> {r.error}")
+    click.echo(f"\nDone. {published} published, {failed} failed.")
+
+
+@schedule.command("worker")
+@click.option("--interval", default=300, type=int, help="Check interval in seconds (default: 300)")
+def schedule_worker(interval: int) -> None:
+    """Run the scheduler worker in the foreground (checks periodically)."""
+    import asyncio
+
+    from social_agent.scheduler import run_loop
+
+    click.echo(f"Starting scheduler worker (interval: {interval}s). Press Ctrl+C to stop.")
+    try:
+        asyncio.run(run_loop(draft_store, interval_seconds=interval))
+    except KeyboardInterrupt:
+        click.echo("\nScheduler worker stopped.")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -37,10 +37,11 @@ def _patch_stores(tmp_path: Path):
     import social_agent.api.router_drafts as rd
     import social_agent.api.router_ideas as ri
     import social_agent.api.router_publish as rp
+    import social_agent.api.router_scheduler as rsc
     import social_agent.api.router_seeds as rse
     import social_agent.api.router_sources as rs
 
-    for mod in (rs, rse, rd, rp):
+    for mod in (rs, rse, rd, rp, rsc):
         mod.DATA_DIR = data_dir
 
     ri.DATA_DIR = data_dir
@@ -53,6 +54,7 @@ def _patch_stores(tmp_path: Path):
     rd.draft_store = MarkdownStore[Draft](data_dir / "drafts", Draft)
     rd.idea_store = MarkdownStore[Idea](data_dir / "ideas", Idea)
     rp.draft_store = MarkdownStore[Draft](data_dir / "drafts", Draft)
+    rsc.draft_store = MarkdownStore[Draft](data_dir / "drafts", Draft)
 
 
 @pytest.fixture
@@ -819,3 +821,120 @@ def _create_test_draft(client) -> dict:
 
     drafts = resp.json().get("drafts", [])
     return drafts[0] if drafts else {}
+
+
+# ── Scheduler ──
+
+
+class TestSchedulerAPI:
+    def test_schedule_draft(self, client):
+        draft = _create_test_draft(client)
+        when = "2026-06-20T15:30:00+00:00"
+        resp = client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": when})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scheduled_at"] is not None
+        assert data["status"] == "draft"
+
+    def test_schedule_draft_not_found(self, client):
+        resp = client.post("/api/drafts/nonexistent/schedule", json={"scheduled_at": "2026-06-20T15:30"})
+        assert resp.status_code == 404
+
+    def test_schedule_published_draft_rejected(self, client):
+        draft = _create_test_draft(client)
+        client.patch(f"/api/drafts/{draft['id']}", json={"status": "approved"})
+
+        patches = [
+            patch.object(global_settings, "twitter_api_key", "ck"),
+            patch.object(global_settings, "twitter_api_secret", "cs"),
+            patch.object(global_settings, "twitter_access_token", "at"),
+            patch.object(global_settings, "twitter_access_token_secret", "ats"),
+        ]
+        for p in patches:
+            p.start()
+        from social_agent.publishers.base import PublishResult
+        with patch("social_agent.api.router_publish.TwitterPublisher.publish",
+                   return_value=PublishResult(success=True, platform_post_id="x")):
+            client.post(f"/api/publish/{draft['id']}")
+        for p in patches:
+            p.stop()
+
+        resp = client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": "2026-06-20T15:30"})
+        assert resp.status_code == 400
+
+    def test_unschedule_draft(self, client):
+        draft = _create_test_draft(client)
+        client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": "2026-06-20T15:30"})
+        resp = client.post(f"/api/drafts/{draft['id']}/unschedule")
+        assert resp.status_code == 200
+        assert resp.json()["scheduled_at"] is None
+
+    def test_unschedule_draft_not_found(self, client):
+        resp = client.post("/api/drafts/nonexistent/unschedule")
+        assert resp.status_code == 404
+
+    def test_list_scheduled_drafts(self, client):
+        draft = _create_test_draft(client)
+        client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": "2026-06-20T15:30"})
+        resp = client.get("/api/drafts/scheduled")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["id"] == draft["id"]
+
+    def test_list_scheduled_drafts_empty(self, client):
+        resp = client.get("/api/drafts/scheduled")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_scheduler_run_no_due(self, client):
+        resp = client.post("/api/scheduler/run")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["published"] == 0
+        assert data["failed"] == 0
+        assert data["results"] == []
+
+    def test_scheduler_run_publishes_due_draft(self, client):
+        draft = _create_test_draft(client)
+        past = datetime.now(timezone.utc).isoformat()
+        client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": past})
+
+        patches = [
+            patch.object(global_settings, "twitter_api_key", "ck"),
+            patch.object(global_settings, "twitter_api_secret", "cs"),
+            patch.object(global_settings, "twitter_access_token", "at"),
+            patch.object(global_settings, "twitter_access_token_secret", "ats"),
+        ]
+        for p in patches:
+            p.start()
+        from social_agent.publishers.base import PublishResult
+        try:
+            with patch("social_agent.scheduler.TwitterPublisher.publish",
+                       return_value=PublishResult(success=True, platform_post_id="sched_123")):
+                resp = client.post("/api/scheduler/run")
+        finally:
+            for p in patches:
+                p.stop()
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["published"] == 1
+        assert data["failed"] == 0
+        assert data["results"][0]["platform_post_id"] == "sched_123"
+
+        stored = client.get(f"/api/drafts/{draft['id']}").json()
+        assert stored["status"] == "published"
+        assert stored["scheduled_at"] is None
+
+    def test_scheduler_run_skips_future_draft(self, client):
+        draft = _create_test_draft(client)
+        future = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": future})
+
+        resp = client.post("/api/scheduler/run")
+        assert resp.status_code == 200
+        assert resp.json()["published"] == 0
+        stored = client.get(f"/api/drafts/{draft['id']}").json()
+        assert stored["status"] == "draft"
+        assert stored["scheduled_at"] is not None

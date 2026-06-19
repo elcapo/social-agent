@@ -8,7 +8,10 @@ import Nav from "../components/Nav.astro";
   <main class="max-w-6xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">Drafts</h1>
-      <button class="btn btn-primary" id="btn-generate">Generate from idea</button>
+      <div class="flex gap-2">
+        <button class="btn btn-outline" id="btn-run-scheduler">Run scheduler</button>
+        <button class="btn btn-primary" id="btn-generate">Generate from idea</button>
+      </div>
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
@@ -76,6 +79,15 @@ import Nav from "../components/Nav.astro";
 
     function showError(msg) {
       errorEl.textContent = msg;
+      errorEl.classList.remove("alert-info");
+      errorEl.classList.add("alert-error");
+      errorEl.classList.remove("hidden");
+    }
+
+    function showInfo(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.remove("alert-error");
+      errorEl.classList.add("alert-info");
       errorEl.classList.remove("hidden");
     }
 
@@ -141,6 +153,7 @@ import Nav from "../components/Nav.astro";
             <th>Content</th>
             <th>Media</th>
             <th>Status</th>
+            <th>Scheduled</th>
             <th>Created</th>
             <th></th>
           </tr>
@@ -157,11 +170,16 @@ import Nav from "../components/Nav.astro";
               return `<div class="flex gap-1">${allMedia.slice(0, 3).map(m => `<img src="${esc(m.src)}" class="w-8 h-8 object-cover rounded" alt="" />`).join("")}${allMedia.length > 3 ? `<span class="text-xs text-base-content/40">+${allMedia.length - 3}</span>` : ""}</div>`;
             })()}</td>
             <td><span class="badge badge-sm badge-soft ${d.status === "draft" ? "badge-warning" : d.status === "approved" ? "badge-info" : d.status === "published" ? "badge-success" : "badge-error"}">${d.status}</span></td>
+            <td>${d.scheduled_at
+              ? `<span class="badge badge-sm badge-soft badge-secondary whitespace-nowrap" title="${esc(d.scheduled_at)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${new Date(d.scheduled_at).toLocaleString()}</span>`
+              : '<span class="text-base-content/20">—</span>'}</td>
             <td class="text-sm text-base-content/40">${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</td>
             <td><div class="flex gap-1"><a href="/drafts/edit?id=${d.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit draft"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a>${d.status === "draft"
               ? `<button class="btn btn-ghost btn-xs text-success" data-action="approve" data-id="${d.id}" aria-label="Approve draft">Approve</button><button class="btn btn-ghost btn-xs text-error" data-action="reject" data-id="${d.id}" aria-label="Reject draft">Reject</button>`
               : d.status === "approved"
               ? `<button class="btn btn-ghost btn-xs text-primary" data-action="publish" data-id="${d.id}" aria-label="Publish draft">Publish</button>`
+              : ""}${d.scheduled_at
+              ? `<button class="btn btn-ghost btn-xs" data-action="unschedule" data-id="${d.id}" aria-label="Cancel schedule">Cancel schedule</button>`
               : ""}</div></td>
           </tr>`).join("")}</tbody>
       </table></div>`;
@@ -201,10 +219,40 @@ import Nav from "../components/Nav.astro";
             if (!res.ok) throw new Error(await getErrorMsg(res));
             break;
           }
+          case "unschedule": {
+            const ok = await askConfirm("Cancel the schedule for this draft?");
+            if (!ok) return;
+            const res = await fetch(`${API}/drafts/${btn.dataset.id}/unschedule`, { method: "POST" });
+            if (!res.ok) throw new Error(await getErrorMsg(res));
+            break;
+          }
         }
         load();
       } catch (e) {
         showError("Error: " + e.message);
+      }
+    });
+
+    document.getElementById("btn-run-scheduler").addEventListener("click", async () => {
+      hideError();
+      const btn = document.getElementById("btn-run-scheduler");
+      btn.disabled = true;
+      btn.textContent = "Running...";
+      try {
+        const res = await fetch(`${API}/scheduler/run`, { method: "POST" });
+        if (!res.ok) throw new Error(await getErrorMsg(res));
+        const data = await res.json();
+        if (data.published === 0 && data.failed === 0) {
+          showInfo("No drafts due for publishing.");
+        } else {
+          showInfo(`Scheduler: ${data.published} published, ${data.failed} failed.`);
+        }
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Run scheduler";
       }
     });
 

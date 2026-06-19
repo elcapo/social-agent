@@ -219,11 +219,49 @@ social-agent drafts publish <draft_id>
 
 Los borradores pueden tener estos estados:
 `draft` → `approved` → `published` (éxito) / `failed` (error de API).
-Usa `show` para inspeccionar `publish_error` en borradores fallidos:
+Usa `show` para inspeccionar `publish_error` en borradores fallidos: 
 
 ```bash
 social-agent drafts show <draft_id>
 ```
+
+### Programación de publicaciones (`schedule`)
+
+Los borradores pueden programarse para publicarse automáticamente en una
+fecha futura. El scheduler comprueba periódicamente qué drafts han llegado
+a su hora y los publica con las credenciales configuradas.
+
+```bash
+# Programar un borrador (formato ISO 8601, con o sin zona horaria)
+social-agent schedule set <draft_id> 2026-06-20T15:30:00
+
+# Listar borradores programados (ordenados por fecha)
+social-agent schedule list
+
+# Cancelar la programación de un borrador
+social-agent schedule cancel <draft_id>
+
+# Publicar ahora todos los drafts cuya hora ha llegado (one-shot)
+social-agent schedule publish
+```
+
+#### Lanzar el "cron" (worker en segundo plano)
+
+Para que la publicación programada funcione de forma automática, ejecuta el
+worker del scheduler en un proceso aparte (en una terminal, un `tmux`/`screen`,
+o como servicio systemd):
+
+```bash
+# Comprueba cada 5 minutos (por defecto) y publica los drafts vencidos
+uv run social-agent schedule worker
+
+# Intervalo personalizado (en segundos)
+uv run social-agent schedule worker --interval 60
+```
+
+El worker se ejecuta en primer plano hasta que lo detienes con `Ctrl+C`.
+Mientras esté activo, cualquier draft con `scheduled_at` en el pasado y
+estado `draft` se publicará automáticamente en su plataforma.
 
 ## Personalización
 
@@ -279,9 +317,13 @@ La API está documentada automáticamente con OpenAPI:
 | `POST` | `/api/seeds/generate` | Generar semillas desde fuentes |
 | `PATCH` | `/api/seeds/{id}` | Actualizar semilla |
 | `GET` | `/api/drafts` | Listar borradores (`?platform=twitter&status=approved`) |
+| `GET` | `/api/drafts/scheduled` | Listar borradores programados |
 | `GET` | `/api/drafts/{id}` | Obtener borrador |
 | `POST` | `/api/drafts/generate` | Generar borradores desde una semilla |
 | `PATCH` | `/api/drafts/{id}` | Actualizar borrador (estado, contenido, notas) |
+| `POST` | `/api/drafts/{id}/schedule` | Programar borrador (body: `{"scheduled_at": "2026-06-20T15:30:00"}`) |
+| `POST` | `/api/drafts/{id}/unschedule` | Eliminar la programación de un borrador |
+| `POST` | `/api/scheduler/run` | Ejecutar el scheduler (publica drafts vencidos) |
 | `POST` | `/api/publish/{id}` | Publicar borrador aprobado en la red social |
 
 ### Ejemplos con curl
@@ -313,4 +355,12 @@ curl -X PATCH http://localhost:8000/api/drafts/draft_123 \
 
 # Publicar (requiere credenciales configuradas)
 curl -X POST http://localhost:8000/api/publish/draft_123
+
+# Programar un borrador para una fecha futura
+curl -X POST http://localhost:8000/api/drafts/draft_123/schedule \
+  -H "Content-Type: application/json" \
+  -d '{"scheduled_at": "2026-06-20T15:30:00+00:00"}'
+
+# Ejecutar el scheduler manualmente (publica drafts vencidos)
+curl -X POST http://localhost:8000/api/scheduler/run
 ```

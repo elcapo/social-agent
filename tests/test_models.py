@@ -216,3 +216,31 @@ class TestDraft:
         fm["content"] = draft.content
         restored = Draft.from_frontmatter(fm)
         assert restored.media_paths == ["/tmp/img1.jpg", "/tmp/img2.png"]
+
+    def test_draft_scheduled_at_default_none(self):
+        draft = Draft(idea_id="i1", platform="twitter", content="Hello")
+        assert draft.scheduled_at is None
+
+    def test_draft_scheduled_at_roundtrip(self):
+        when = datetime(2026, 6, 20, 15, 30, tzinfo=timezone.utc)
+        draft = Draft(
+            idea_id="i1", platform="twitter", content="Scheduled",
+            scheduled_at=when,
+        )
+        fm = draft.to_frontmatter()
+        assert fm["scheduled_at"] == when.isoformat()
+        fm["content"] = draft.content
+        restored = Draft.from_frontmatter(fm)
+        assert restored.scheduled_at == when
+
+    def test_draft_scheduled_at_omitted_when_none(self):
+        draft = Draft(idea_id="i1", platform="twitter", content="No schedule")
+        fm = draft.to_frontmatter()
+        assert "scheduled_at" not in fm
+
+    def test_draft_scheduled_at_none_after_roundtrip(self):
+        draft = Draft(idea_id="i1", platform="twitter", content="No schedule")
+        fm = draft.to_frontmatter()
+        fm["content"] = draft.content
+        restored = Draft.from_frontmatter(fm)
+        assert restored.scheduled_at is None

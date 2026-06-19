@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from datetime import datetime
 from typing import Optional
 
 import frontmatter
@@ -45,6 +46,10 @@ class AttachMediaRequest(BaseModel):
     media_urls: list[str] = []
 
 
+class ScheduleDraftRequest(BaseModel):
+    scheduled_at: datetime
+
+
 @router.get("/drafts")
 def list_drafts(platform: Optional[str] = None, status: Optional[str] = None) -> list[Draft]:
     def _filter(d: Draft) -> bool:
@@ -54,6 +59,11 @@ def list_drafts(platform: Optional[str] = None, status: Optional[str] = None) ->
             return False
         return True
     return draft_store.list(filter_fn=_filter)
+
+
+@router.get("/drafts/scheduled")
+def list_scheduled_drafts() -> list[Draft]:
+    return [d for d in draft_store.list() if d.scheduled_at is not None]
 
 
 @router.get("/drafts/{draft_id}")
@@ -171,5 +181,31 @@ def upload_media(draft_id: str, file: UploadFile) -> Draft:
     abs_path = str(dest.resolve())
     logger.info("Uploaded media for draft '%s': %s", draft_id, abs_path)
     draft.media_paths.append(abs_path)
+    draft_store.save(draft)
+    return draft
+
+
+@router.post("/drafts/{draft_id}/schedule")
+def schedule_draft(draft_id: str, body: ScheduleDraftRequest) -> Draft:
+    draft = draft_store.get(draft_id)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+
+    if draft.status == DraftStatus.published:
+        raise HTTPException(400, "Cannot schedule a draft that is already published")
+
+    draft.scheduled_at = body.scheduled_at
+    draft.status = DraftStatus.draft
+    draft_store.save(draft)
+    return draft
+
+
+@router.post("/drafts/{draft_id}/unschedule")
+def unschedule_draft(draft_id: str) -> Draft:
+    draft = draft_store.get(draft_id)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+
+    draft.scheduled_at = None
     draft_store.save(draft)
     return draft
