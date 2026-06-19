@@ -274,7 +274,7 @@ La API está documentada automáticamente con OpenAPI:
 | `GET` | `/api/sources/{id}` | Obtener fuente |
 | `PATCH` | `/api/sources/{id}` | Actualizar fuente |
 | `DELETE` | `/api/sources/{id}` | Eliminar fuente |
-| `GET` | `/api/seeds` | Listar semillas (filtro opcional `?status=pending`) |
+| `GET` | `/api/seeds` | Listar semillas (filtros opcionales: `?status=pending`, `?statuses=pending&statuses=approved`, `?q=keyword`, `&url=fragment`) |
 | `GET` | `/api/seeds/{id}` | Obtener semilla |
 | `POST` | `/api/seeds/generate` | Generar semillas desde fuentes |
 | `PATCH` | `/api/seeds/{id}` | Actualizar semilla |

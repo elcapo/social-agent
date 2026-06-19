@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from social_agent.collectors.base import CollectedItem
@@ -79,16 +79,37 @@ def _collected_item_to_seed(item: CollectedItem) -> Seed:
 
 
 @router.get("/seeds")
-def list_seeds(status: Optional[str] = None, approved: Optional[bool] = None) -> list[Seed]:
+def list_seeds(
+    status: Optional[str] = None,
+    approved: Optional[bool] = None,
+    statuses: Optional[list[str]] = Query(default=None),
+    q: Optional[str] = None,
+    url: Optional[str] = None,
+) -> list[Seed]:
+    status_set = set(statuses) if statuses else None
+    q_lower = q.strip().lower() if q else None
+    url_lower = url.strip().lower() if url else None
+
     def _filter(s: Seed) -> bool:
-        if status and s.status.value != status:
+        if status_set is not None:
+            if s.status.value not in status_set:
+                return False
+        elif status and s.status.value != status:
             return False
         if approved is not None:
             if approved and s.status != SeedStatus.approved:
                 return False
             if not approved and s.status == SeedStatus.approved:
                 return False
+        if q_lower:
+            haystack = f"{s.title} {s.content}".lower()
+            if q_lower not in haystack:
+                return False
+        if url_lower:
+            if not s.source_url or url_lower not in s.source_url.lower():
+                return False
         return True
+
     items = seed_store.list(filter_fn=_filter)
     items.sort(key=lambda s: s.created_at or "", reverse=True)
     return items

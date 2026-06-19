@@ -267,6 +267,136 @@ class TestSeedsAPI:
         approved = client.get("/api/seeds", params={"status": "approved"})
         assert len(approved.json()) == 1
 
+    def test_list_seeds_filter_by_statuses_multiple(self, client):
+        _create_test_source(client)
+        items = [
+            CollectedItem(
+                title="A", content="Body A", url="https://example.com/a",
+                source_id="src_test", source_name="Test Source",
+                published=datetime.now(timezone.utc),
+            ),
+            CollectedItem(
+                title="B", content="Body B", url="https://example.com/b",
+                source_id="src_test", source_name="Test Source",
+                published=datetime.now(timezone.utc),
+            ),
+        ]
+        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=items):
+            resp = client.post("/api/seeds/generate", json={})
+        seeds = resp.json()["seeds"]
+        client.patch(f"/api/seeds/{seeds[0]['id']}", json={"status": "approved"})
+        client.patch(f"/api/seeds/{seeds[1]['id']}", json={"status": "discarded"})
+
+        result = client.get("/api/seeds", params={"statuses": ["approved", "discarded"]})
+        assert result.status_code == 200
+        statuses = {s["status"] for s in result.json()}
+        assert statuses == {"approved", "discarded"}
+
+    def test_list_seeds_filter_by_statuses_none_shows_all(self, client):
+        _create_test_source(client)
+        items = [
+            CollectedItem(
+                title="A", content="Body A", url="https://example.com/a",
+                source_id="src_test", source_name="Test Source",
+                published=datetime.now(timezone.utc),
+            ),
+            CollectedItem(
+                title="B", content="Body B", url="https://example.com/b",
+                source_id="src_test", source_name="Test Source",
+                published=datetime.now(timezone.utc),
+            ),
+        ]
+        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=items):
+            client.post("/api/seeds/generate", json={})
+        resp = client.get("/api/seeds", params={"statuses": []})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 2
+
+    def _generate_with(self, client, title, content, url):
+        _create_test_source(client)
+        item = CollectedItem(
+            title=title, content=content, url=url, source_id="src_test",
+            source_name="Test Source", published=datetime.now(timezone.utc),
+        )
+        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=[item]):
+            resp = client.post("/api/seeds/generate", json={})
+        return resp.json()["seeds"][0]
+
+    def test_list_seeds_filter_by_keyword_in_title(self, client):
+        self._generate_with(client, "AI Ethics Article", "Body about something else",
+                            "https://example.com/a")
+        resp = client.get("/api/seeds", params={"q": "ethics"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert "Ethics" in data[0]["title"]
+
+    def test_list_seeds_filter_by_keyword_in_content(self, client):
+        self._generate_with(client, "Some Title", "Deep discussion about machine learning",
+                            "https://example.com/a")
+        resp = client.get("/api/seeds", params={"q": "machine learning"})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_list_seeds_filter_by_keyword_case_insensitive(self, client):
+        self._generate_with(client, "Python Programming", "Body",
+                            "https://example.com/a")
+        resp = client.get("/api/seeds", params={"q": "PYTHON"})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_list_seeds_filter_by_keyword_no_match(self, client):
+        self._generate_with(client, "Some Title", "Body",
+                            "https://example.com/a")
+        resp = client.get("/api/seeds", params={"q": "nonexistenttermxyz"})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 0
+
+    def test_list_seeds_filter_by_url_substring(self, client):
+        self._generate_with(client, "A", "Body", "https://blog.example.com/post/1")
+        resp = client.get("/api/seeds", params={"url": "blog.example"})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_list_seeds_filter_by_url_case_insensitive(self, client):
+        self._generate_with(client, "A", "Body", "https://Example.com/Path")
+        resp = client.get("/api/seeds", params={"url": "example.com/path"})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_list_seeds_filter_by_url_no_match(self, client):
+        self._generate_with(client, "A", "Body", "https://example.com/a")
+        resp = client.get("/api/seeds", params={"url": "nomatch.example"})
+        assert resp.status_code == 200
+        assert len(resp.json()) == 0
+
+    def test_list_seeds_filters_combined(self, client):
+        _create_test_source(client)
+        items = [
+            CollectedItem(
+                title="AI Future", content="Discuss AI",
+                url="https://tech.example.com/x", source_id="src_test",
+                source_name="Test Source", published=datetime.now(timezone.utc),
+            ),
+            CollectedItem(
+                title="Other", content="Other body",
+                url="https://news.example.com/y", source_id="src_test",
+                source_name="Test Source", published=datetime.now(timezone.utc),
+            ),
+        ]
+        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=items):
+            r1 = client.post("/api/seeds/generate", json={})
+        seeds = r1.json()["seeds"]
+        client.patch(f"/api/seeds/{seeds[0]['id']}", json={"status": "approved"})
+
+        resp = client.get("/api/seeds", params={
+            "statuses": ["approved"], "q": "ai", "url": "tech.example",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["title"] == "AI Future"
+
 
 # ── Ideas ──
 
