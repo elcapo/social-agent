@@ -60,7 +60,7 @@ class WriterAgent(BaseAgent):
         platform_name: str = "",
         max_chars: int = 0,
         dry_run: bool = False,
-    ) -> Draft | str:
+    ) -> Draft | str | None:
         url_str = idea.source_url or "(none)"
 
         char_limit = max_chars if max_chars else "sin límite"
@@ -83,6 +83,13 @@ class WriterAgent(BaseAgent):
             return response
 
         content = _parse_post(response)
+
+        if not content:
+            response = self.run(user_prompt, max_tokens=4096, response_format={"type": "json_object"}, temperature=0.9)
+            content = _parse_post(response)
+            if not content:
+                return None
+
         if max_chars and _effective_length(content) > max_chars:
             content = _truncate_to_max_chars(content, max_chars)
 

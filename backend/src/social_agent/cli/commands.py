@@ -438,6 +438,8 @@ def drafts_generate(idea_id: str, platform: tuple[str, ...], dry_run: bool) -> N
             click.echo(f"\n── {p} draft ──")
             click.echo(str(result))
             click.echo("─────" + "─" * len(p) + "──────")
+        elif result is None:
+            click.echo(f"  Failed: LLM returned empty content for {p} after retry")
         else:
             draft_store.save(result)
             click.echo(f"  Created: {result.id}")

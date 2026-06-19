@@ -104,6 +104,8 @@ def generate_drafts(body: GenerateDraftsRequest) -> GenerateDraftsResponse:
 
         if body.dry_run:
             raw_responses[p] = str(result)
+        elif result is None:
+            raise HTTPException(500, f"LLM returned empty content for platform '{p}' after retry")
         else:
             draft_store.save(result)
             drafts.append(result)
