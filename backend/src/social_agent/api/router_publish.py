@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from fastapi import APIRouter, HTTPException
 
 from social_agent.config import settings
@@ -10,7 +8,7 @@ from social_agent.publishers.linkedin import LinkedInPublisher
 from social_agent.publishers.twitter import TwitterPublisher
 from social_agent.storage.markdown_store import MarkdownStore
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir.resolve()
 draft_store = MarkdownStore[Draft](DATA_DIR / "drafts", Draft)
 
 router = APIRouter(tags=["publish"])

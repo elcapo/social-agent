@@ -17,7 +17,7 @@ from social_agent.models.source import Source, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
 from social_agent.utils import html_to_markdown
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir.resolve()
 SEEDS_DIR = DATA_DIR / "seeds"
 IDEAS_DIR = DATA_DIR / "ideas"
 DRAFTS_DIR = DATA_DIR / "drafts"

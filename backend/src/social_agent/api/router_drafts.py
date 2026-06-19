@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 import shutil
-from pathlib import Path
 from typing import Optional
 
 import frontmatter
@@ -14,7 +14,9 @@ from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.storage.markdown_store import MarkdownStore
 
-DATA_DIR = Path("data")
+logger = logging.getLogger(__name__)
+
+DATA_DIR = settings.data_dir.resolve()
 draft_store = MarkdownStore[Draft](DATA_DIR / "drafts", Draft)
 idea_store = MarkdownStore[Idea](DATA_DIR / "ideas", Idea)
 
@@ -161,10 +163,13 @@ def upload_media(draft_id: str, file: UploadFile) -> Draft:
     media_dir = DATA_DIR / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
 
-    dest = media_dir / f"{draft_id}_{file.filename or 'upload'}"
+    filename = f"{draft_id}_{file.filename or 'upload'}"
+    dest = media_dir / filename
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
-    draft.media_paths.append(f"data/media/{draft_id}_{file.filename or 'upload'}")
+    abs_path = str(dest.resolve())
+    logger.info("Uploaded media for draft '%s': %s", draft_id, abs_path)
+    draft.media_paths.append(abs_path)
     draft_store.save(draft)
     return draft

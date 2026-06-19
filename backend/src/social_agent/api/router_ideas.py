@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from social_agent.agents.ideator import IdeatorAgent
+from social_agent.config import settings
 from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.storage.markdown_store import MarkdownStore
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir.resolve()
 idea_store = MarkdownStore[Idea](DATA_DIR / "ideas", Idea)
 seed_store = MarkdownStore[Seed](DATA_DIR / "seeds", Seed)
 

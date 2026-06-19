@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from social_agent.config import settings
 from social_agent.models.source import Source, SourcePriority, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir.resolve()
 source_store = MarkdownStore[Source](DATA_DIR / "sources", Source)
 
 router = APIRouter(tags=["sources"])

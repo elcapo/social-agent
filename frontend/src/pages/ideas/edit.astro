@@ -3,13 +3,13 @@ import Layout from "../../layouts/Layout.astro";
 import Nav from "../../components/Nav.astro";
 ---
 
-<Layout title="Edit Seed">
+<Layout title="Edit Idea">
   <Nav />
   <main class="max-w-3xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <a href="/seeds" class="link link-hover text-sm text-base-content/50">&larr; Back to seeds</a>
-        <h1 class="text-2xl font-bold mt-1" id="page-title">Edit Seed</h1>
+        <a href="/ideas" class="link link-hover text-sm text-base-content/50">&larr; Back to ideas</a>
+        <h1 class="text-2xl font-bold mt-1" id="page-title">Edit Idea</h1>
       </div>
     </div>
 
@@ -18,7 +18,7 @@ import Nav from "../../components/Nav.astro";
 
     <div id="loading" class="flex items-center gap-2 py-8">
       <span class="loading loading-spinner loading-sm"></span>
-      <span class="text-sm text-base-content/40">Loading seed...</span>
+      <span class="text-sm text-base-content/40">Loading idea...</span>
     </div>
 
     <div id="form-container" class="hidden">
@@ -28,33 +28,36 @@ import Nav from "../../components/Nav.astro";
       </div>
 
       <fieldset class="fieldset bg-base-100 border border-base-300 rounded-box p-6">
-        <legend class="fieldset-legend text-xl font-bold">Seed details</legend>
+        <legend class="fieldset-legend text-xl font-bold">Idea details</legend>
 
         <label class="label">Status</label>
-        <div id="seed-status-display"></div>
+        <div id="idea-status-display"></div>
 
         <label class="label">Title</label>
-        <input type="text" id="seed-title" class="input w-full" placeholder="Seed title" />
+        <input type="text" id="idea-title" class="input w-full" placeholder="Idea title" />
 
-        <label class="label">Content</label>
-        <textarea id="seed-content" class="textarea w-full" rows="8" placeholder="Seed content..."></textarea>
+        <label class="label">Summary</label>
+        <textarea id="idea-summary" class="textarea w-full" rows="8" placeholder="Idea summary..."></textarea>
+
+        <label class="label">Seed ID</label>
+        <input type="text" id="idea-seed-id" class="input w-full" disabled />
 
         <label class="label">Source URL</label>
-        <input type="url" id="seed-source-url" class="input w-full" placeholder="https://..." />
+        <input type="url" id="idea-source-url" class="input w-full" placeholder="https://..." disabled />
 
         <label class="label">Created</label>
-        <div id="seed-created" class="text-sm text-base-content/60"></div>
+        <div id="idea-created" class="text-sm text-base-content/60"></div>
       </fieldset>
 
       <div class="flex gap-3 mt-6">
-        <a href="/seeds" class="btn">Cancel</a>
+        <a href="/ideas" class="btn">Cancel</a>
         <button class="btn btn-primary" id="btn-save">Save changes</button>
       </div>
     </div>
 
     <div id="not-found" class="hidden">
-      <div class="alert alert-error">Seed not found.</div>
-      <a href="/seeds" class="btn btn-ghost mt-4">&larr; Back to seeds</a>
+      <div class="alert alert-error">Idea not found.</div>
+      <a href="/ideas" class="btn btn-ghost mt-4">&larr; Back to ideas</a>
     </div>
   </main>
 
@@ -62,7 +65,7 @@ import Nav from "../../components/Nav.astro";
     const API = "http://localhost:8000/api";
 
     const params = new URLSearchParams(window.location.search);
-    const seedId = params.get("id");
+    const ideaId = params.get("id");
 
     const errorEl = document.getElementById("error-msg");
     const successEl = document.getElementById("success-msg");
@@ -72,12 +75,12 @@ import Nav from "../../components/Nav.astro";
     const readonlyNotice = document.getElementById("readonly-notice");
     const readonlyMsg = document.getElementById("readonly-msg");
     const btnSave = document.getElementById("btn-save");
-    const allInputs = ["seed-title", "seed-content", "seed-source-url"].map(id => document.getElementById(id));
+    const editableInputs = ["idea-title", "idea-summary"].map(id => document.getElementById(id));
 
-    const READONLY_STATUSES = ["approved", "used", "discarded"];
+    const READONLY_STATUSES = ["used", "discarded"];
 
     function setFormEditable(editable) {
-      allInputs.forEach(el => { el.disabled = !editable; el.readOnly = !editable; });
+      editableInputs.forEach(el => { el.disabled = !editable; el.readOnly = !editable; });
       if (editable) {
         readonlyNotice.classList.add("hidden");
         btnSave.classList.remove("hidden");
@@ -87,7 +90,7 @@ import Nav from "../../components/Nav.astro";
     }
 
     function setStatusBadge(status) {
-      const colors = { pending: "badge-warning", approved: "badge-info", used: "badge-success", discarded: "badge-error" };
+      const colors = { pending: "badge-warning", used: "badge-success", discarded: "badge-error" };
       return `<span class="badge badge-md badge-soft ${colors[status] || "badge-ghost"}">${status}</span>`;
     }
 
@@ -117,42 +120,42 @@ import Nav from "../../components/Nav.astro";
     }
 
     async function load() {
-      if (!seedId) {
+      if (!ideaId) {
         loadingEl.classList.add("hidden");
         notFoundEl.classList.remove("hidden");
         return;
       }
 
-      const res = await fetch(`${API}/seeds/${seedId}`);
+      const res = await fetch(`${API}/ideas/${ideaId}`);
       if (!res.ok) {
         loadingEl.classList.add("hidden");
         notFoundEl.classList.remove("hidden");
         return;
       }
 
-      const seed = await res.json();
+      const idea = await res.json();
       loadingEl.classList.add("hidden");
       formContainer.classList.remove("hidden");
 
-      document.getElementById("page-title").textContent = `Edit: ${seed.title}`;
-      document.getElementById("seed-status-display").innerHTML = setStatusBadge(seed.status);
-      document.getElementById("seed-title").value = seed.title;
-      document.getElementById("seed-content").value = seed.content || "";
-      document.getElementById("seed-source-url").value = seed.source_url || "";
-      document.getElementById("seed-created").textContent = seed.created_at ? new Date(seed.created_at).toLocaleString() : "—";
+      document.getElementById("page-title").textContent = `Edit: ${idea.title}`;
+      document.getElementById("idea-status-display").innerHTML = setStatusBadge(idea.status);
+      document.getElementById("idea-title").value = idea.title;
+      document.getElementById("idea-summary").value = idea.summary || "";
+      document.getElementById("idea-seed-id").value = idea.seed_id || "";
+      document.getElementById("idea-source-url").value = idea.source_url || "";
+      document.getElementById("idea-created").textContent = idea.created_at ? new Date(idea.created_at).toLocaleString() : "—";
 
-      const readOnly = READONLY_STATUSES.includes(seed.status);
+      const readOnly = READONLY_STATUSES.includes(idea.status);
       setFormEditable(!readOnly);
       if (readOnly) {
-        readonlyMsg.textContent = `This seed is in "${seed.status}" state and cannot be modified.`;
+        readonlyMsg.textContent = `This idea is in "${idea.status}" state and cannot be modified.`;
         readonlyNotice.classList.remove("hidden");
       }
     }
 
     btnSave.addEventListener("click", async () => {
-      const title = document.getElementById("seed-title").value.trim();
-      const content = document.getElementById("seed-content").value.trim();
-      const sourceUrl = document.getElementById("seed-source-url").value.trim();
+      const title = document.getElementById("idea-title").value.trim();
+      const summary = document.getElementById("idea-summary").value.trim();
 
       if (!title) { showError("Title is required."); return; }
 
@@ -161,18 +164,17 @@ import Nav from "../../components/Nav.astro";
       hideAll();
 
       try {
-        const body = { title, content };
-        if (sourceUrl) body.source_url = sourceUrl;
-        const res = await fetch(`${API}/seeds/${seedId}`, {
+        const body = { title, summary };
+        const res = await fetch(`${API}/ideas/${ideaId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
         if (!res.ok) throw new Error(await getErrorMessage(res));
 
-        showSuccess("Seed updated successfully.");
+        showSuccess("Idea updated successfully.");
         btnSave.textContent = "Saved!";
-        setTimeout(() => { window.location.href = "/seeds"; }, 1000);
+        setTimeout(() => { window.location.href = "/ideas"; }, 1000);
       } catch (e) {
         showError("Error: " + e.message);
         btnSave.disabled = false;

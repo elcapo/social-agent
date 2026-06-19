@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -17,7 +16,7 @@ from social_agent.models.source import Source, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
 from social_agent.utils import html_to_markdown
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir.resolve()
 seed_store = MarkdownStore[Seed](DATA_DIR / "seeds", Seed)
 source_store = MarkdownStore[Source](DATA_DIR / "sources", Source)
 

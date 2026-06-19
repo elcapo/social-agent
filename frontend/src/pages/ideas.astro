@@ -32,24 +32,6 @@ import Nav from "../components/Nav.astro";
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
-  <dialog id="edit-modal" class="modal">
-    <div class="modal-box">
-      <input type="hidden" id="edit-id" />
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Edit Idea</legend>
-        <label class="label">Title</label>
-        <input type="text" id="edit-title" class="input w-full" />
-        <label class="label">Summary</label>
-        <textarea id="edit-summary" class="textarea w-full" rows="6"></textarea>
-      </fieldset>
-      <div class="modal-action">
-        <button class="btn" id="edit-cancel">Cancel</button>
-        <button class="btn btn-primary" id="edit-save">Save</button>
-      </div>
-    </div>
-    <form method="dialog" class="modal-backdrop"><button>close</button></form>
-  </dialog>
-
   <dialog id="confirm-dialog" class="modal">
     <div class="modal-box">
       <p class="py-2" id="confirm-msg">Are you sure?</p>
@@ -134,7 +116,7 @@ import Nav from "../components/Nav.astro";
             <span class="text-sm text-base-content/40 whitespace-nowrap">${idea.created_at ? new Date(idea.created_at).toLocaleDateString() : "—"}</span>
             <div class="flex gap-1">${idea.status === "pending"
               ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${idea.id}" aria-label="Discard idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`
-              : ""}<button class="btn btn-square btn-ghost btn-sm" data-action="edit" data-id="${idea.id}" aria-label="Edit idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>${idea.status !== "used"
+              : ""}<a href="/ideas/edit?id=${idea.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a>${idea.status !== "used"
               ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${idea.id}" aria-label="Delete idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>`
               : ""}</div>
           </div>
@@ -159,16 +141,6 @@ import Nav from "../components/Nav.astro";
             if (!res.ok) throw new Error(await getErrorMsg(res));
             break;
           }
-          case "edit": {
-            const res = await fetch(`${API}/ideas/${id}`);
-            if (!res.ok) throw new Error(await getErrorMsg(res));
-            const idea = await res.json();
-            document.getElementById("edit-id").value = idea.id;
-            document.getElementById("edit-title").value = idea.title;
-            document.getElementById("edit-summary").value = idea.summary || "";
-            document.getElementById("edit-modal").showModal();
-            return;
-          }
           case "delete": {
             const ok = await askConfirm("Delete this idea permanently?");
             if (!ok) return;
@@ -180,38 +152,6 @@ import Nav from "../components/Nav.astro";
         load();
       } catch (e) {
         showError("Error: " + e.message);
-      }
-    });
-
-    document.getElementById("edit-cancel").addEventListener("click", () => {
-      document.getElementById("edit-modal").close();
-    });
-
-    document.getElementById("edit-save").addEventListener("click", async () => {
-      const id = document.getElementById("edit-id").value;
-      const title = document.getElementById("edit-title").value.trim();
-      const summary = document.getElementById("edit-summary").value.trim();
-      if (!title) { showError("Title is required."); return; }
-
-      const btn = document.getElementById("edit-save");
-      btn.disabled = true;
-      btn.textContent = "Saving...";
-      hideError();
-
-      try {
-        const res = await fetch(`${API}/ideas/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, summary }),
-        });
-        if (!res.ok) throw new Error(await getErrorMsg(res));
-        document.getElementById("edit-modal").close();
-        load();
-      } catch (e) {
-        showError("Error: " + e.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Save";
       }
     });
 

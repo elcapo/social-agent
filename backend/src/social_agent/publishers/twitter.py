@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from social_agent.media import prepare_media
 from social_agent.models.draft import Draft
 
 from .base import BasePublisher, PublishResult
+
+logger = logging.getLogger(__name__)
 
 
 class TwitterPublisher(BasePublisher):
@@ -54,8 +57,10 @@ class TwitterPublisher(BasePublisher):
             media_ids = []
             for src in all_sources:
                 try:
+                    logger.info("Uploading media for tweet: %s", src)
                     media_ids.append(self._upload_media(src))
-                except Exception:
+                except Exception as e:
+                    logger.warning("Skipping media %s: %s", src, e)
                     continue
             if media_ids:
                 kwargs["media_ids"] = media_ids
