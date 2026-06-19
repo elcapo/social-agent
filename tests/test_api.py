@@ -10,16 +10,12 @@ from social_agent.collectors.base import CollectedItem
 from social_agent.config import settings as global_settings
 from social_agent.main import app
 from social_agent.models.draft import Draft
+from social_agent.models.idea import Idea
 from social_agent.models.seed import Seed
 from social_agent.models.source import Source
 from social_agent.storage.markdown_store import MarkdownStore
 
-MOCK_SEEDS_JSON = """[
-  {"title": "API Idea 1", "summary": "Summary 1", "tags": ["tag1"], "source_index": 1},
-  {"title": "API Idea 2", "summary": "Summary 2", "tags": ["tag2"], "source_index": 2}
-]"""
-
-MOCK_DRAFT = "Post generado por el Writer Agent para pruebas."
+MOCK_IDEAS_JSON = """{"title": "Generated Idea", "summary": "Idea summary from LLM"}"""
 
 MOCK_COLLECTED = [
     CollectedItem(
@@ -30,13 +26,16 @@ MOCK_COLLECTED = [
     ),
 ]
 
+MOCK_DRAFT = "Post generado por el Writer Agent para pruebas."
+
 
 def _patch_stores(tmp_path: Path):
     data_dir = tmp_path / "data"
-    for sub in ("sources", "seeds", "drafts"):
+    for sub in ("sources", "seeds", "ideas", "drafts"):
         (data_dir / sub).mkdir(parents=True)
 
     import social_agent.api.router_drafts as rd
+    import social_agent.api.router_ideas as ri
     import social_agent.api.router_publish as rp
     import social_agent.api.router_seeds as rse
     import social_agent.api.router_sources as rs
@@ -44,11 +43,15 @@ def _patch_stores(tmp_path: Path):
     for mod in (rs, rse, rd, rp):
         mod.DATA_DIR = data_dir
 
+    ri.DATA_DIR = data_dir
+
     rs.source_store = MarkdownStore[Source](data_dir / "sources", Source)
     rse.seed_store = MarkdownStore[Seed](data_dir / "seeds", Seed)
     rse.source_store = MarkdownStore[Source](data_dir / "sources", Source)
+    ri.seed_store = MarkdownStore[Seed](data_dir / "seeds", Seed)
+    ri.idea_store = MarkdownStore[Idea](data_dir / "ideas", Idea)
     rd.draft_store = MarkdownStore[Draft](data_dir / "drafts", Draft)
-    rd.seed_store = MarkdownStore[Seed](data_dir / "seeds", Seed)
+    rd.idea_store = MarkdownStore[Idea](data_dir / "ideas", Idea)
     rp.draft_store = MarkdownStore[Draft](data_dir / "drafts", Draft)
 
 
@@ -166,54 +169,24 @@ class TestSeedsAPI:
         assert resp.json() == []
 
     def test_generate_seeds_no_sources(self, client):
-        resp = client.post("/api/seeds/generate", json={
-            "interests": "tech",
-        })
+        resp = client.post("/api/seeds/generate", json={})
         assert resp.status_code == 400
         assert "sources" in resp.json()["detail"].lower()
 
-    def test_generate_seeds_success(self, client, tmp_path):
+    def test_generate_seeds_success(self, client):
         _create_test_source(client)
 
-        patch_fetch = patch(
+        with patch(
             "social_agent.api.router_seeds.RSSCollector.fetch",
             return_value=MOCK_COLLECTED,
-        )
-        patch_ideator = patch(
-            "social_agent.agents.ideator.IdeatorAgent.run",
-            return_value=MOCK_SEEDS_JSON,
-        )
-        with patch_fetch, patch_ideator:
-            resp = client.post("/api/seeds/generate", json={
-                "interests": "tech, python",
-            })
+        ):
+            resp = client.post("/api/seeds/generate", json={})
         assert resp.status_code == 201
         data = resp.json()
         assert "seeds" in data
-        assert len(data["seeds"]) == 2
-        assert data["seeds"][0]["title"] == "API Idea 1"
-        assert data["seeds"][1]["title"] == "API Idea 2"
-
-    def test_generate_seeds_dry_run(self, client):
-        _create_test_source(client)
-
-        patch_fetch = patch(
-            "social_agent.api.router_seeds.RSSCollector.fetch",
-            return_value=MOCK_COLLECTED,
-        )
-        patch_ideator = patch(
-            "social_agent.agents.ideator.IdeatorAgent.run",
-            return_value=MOCK_SEEDS_JSON,
-        )
-        with patch_fetch, patch_ideator:
-                resp = client.post("/api/seeds/generate", json={
-                    "interests": "tech",
-                    "dry_run": True,
-                })
-        assert resp.status_code == 201
-        data = resp.json()
-        assert data["raw_response"] is not None
-        assert data["seeds"] is None
+        assert len(data["seeds"]) == 1
+        assert data["seeds"][0]["title"] == "Article A"
+        assert data["skipped"] == 0
 
     def test_get_seed(self, client):
         seed = _create_test_seed(client)
@@ -227,72 +200,173 @@ class TestSeedsAPI:
 
     def test_update_seed_status(self, client):
         seed = _create_test_seed(client)
-        resp = client.patch(f"/api/seeds/{seed['id']}", json={"status": "discarded"})
+        resp = client.patch(f"/api/seeds/{seed['id']}", json={"status": "approved"})
         assert resp.status_code == 200
-        assert resp.json()["status"] == "discarded"
+        assert resp.json()["status"] == "approved"
 
     def test_update_seed_not_found(self, client):
         resp = client.patch("/api/seeds/nonexistent", json={"status": "discarded"})
         assert resp.status_code == 404
 
-    def test_update_seed_source_url(self, client):
-        seed = _create_test_seed(client)
-        resp = client.patch(f"/api/seeds/{seed['id']}", json={
-            "source_url": "https://example.com/updated",
-        })
-        assert resp.status_code == 200
-        assert resp.json()["source_url"] == "https://example.com/updated"
-
-    def test_generate_seeds_skips_duplicate_url(self, client, tmp_path):
-        """Generar dos veces seguidas debe saltar seeds con URL duplicada."""
+    def test_generate_seeds_skips_duplicate_url(self, client):
         _create_test_source(client)
 
-        patch_fetch = patch(
+        with patch(
             "social_agent.api.router_seeds.RSSCollector.fetch",
             return_value=MOCK_COLLECTED,
-        )
-        patch_ideator = patch(
-            "social_agent.agents.ideator.IdeatorAgent.run",
-            return_value=MOCK_SEEDS_JSON,
-        )
-        with patch_fetch, patch_ideator:
-            resp1 = client.post("/api/seeds/generate", json={"interests": "tech"})
+        ):
+            resp1 = client.post("/api/seeds/generate", json={})
         assert resp1.status_code == 201
         assert resp1.json()["skipped"] == 0
 
-        with patch_fetch, patch_ideator:
-            resp2 = client.post("/api/seeds/generate", json={"interests": "tech"})
-        assert resp2.status_code == 201
-        assert resp2.json()["skipped"] == 1
-        # Total seeds in store should be 3 (2 from first call + 1 new from second,
-        # the duplicate with source_url was skipped)
-        all_seeds = client.get("/api/seeds").json()
-        assert len(all_seeds) == 3
-
-    def test_generate_seeds_force_overrides_dedup(self, client, tmp_path):
-        """Con force=True se permiten duplicados."""
-        _create_test_source(client)
-
-        patch_fetch = patch(
+        with patch(
             "social_agent.api.router_seeds.RSSCollector.fetch",
             return_value=MOCK_COLLECTED,
-        )
-        patch_ideator = patch(
-            "social_agent.agents.ideator.IdeatorAgent.run",
-            return_value=MOCK_SEEDS_JSON,
-        )
-        with patch_fetch, patch_ideator:
-            client.post("/api/seeds/generate", json={"interests": "tech"})
+        ):
+            resp2 = client.post("/api/seeds/generate", json={})
+        assert resp2.status_code == 201
+        assert resp2.json()["skipped"] == 1
+        all_seeds = client.get("/api/seeds").json()
+        assert len(all_seeds) == 1
 
-        with patch_fetch, patch_ideator:
-            resp = client.post("/api/seeds/generate", json={
-                "interests": "tech",
-                "force": True,
-            })
+    def test_generate_seeds_force_overrides_dedup(self, client):
+        _create_test_source(client)
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            client.post("/api/seeds/generate", json={})
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            resp = client.post("/api/seeds/generate", json={"force": True})
         assert resp.status_code == 201
         assert resp.json()["skipped"] == 0
+        assert len(resp.json()["seeds"]) == 1
+
+    def test_generate_seeds_multiple_sources(self, client):
+        _create_test_source(client)
+        _create_test_source(client)
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            resp = client.post("/api/seeds/generate", json={})
+        assert resp.status_code == 201
         assert len(resp.json()["seeds"]) == 2
-        assert resp.json()["seeds"][0]["source_url"] == "https://example.com/a"
+
+    def test_list_seeds_filter_by_status(self, client):
+        seed = _create_test_seed(client)
+        client.patch(f"/api/seeds/{seed['id']}", json={"status": "approved"})
+        pending = client.get("/api/seeds", params={"status": "pending"})
+        assert len(pending.json()) == 0
+        approved = client.get("/api/seeds", params={"status": "approved"})
+        assert len(approved.json()) == 1
+
+
+# ── Ideas ──
+
+
+class TestIdeasAPI:
+    def test_list_ideas_empty(self, client):
+        resp = client.get("/api/ideas")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_generate_idea_no_seed(self, client):
+        resp = client.post("/api/ideas/generate", json={
+            "seed_id": "nonexistent",
+            "interests": "tech",
+        })
+        assert resp.status_code == 404
+
+    def test_generate_idea_seed_not_approved(self, client):
+        seed = _create_test_seed(client)
+        resp = client.post("/api/ideas/generate", json={
+            "seed_id": seed["id"],
+            "interests": "tech",
+        })
+        assert resp.status_code == 400
+        assert "approved" in resp.json()["detail"].lower()
+
+    def test_generate_idea_success(self, client):
+        seed = _create_test_seed(client)
+        client.patch(f"/api/seeds/{seed['id']}", json={"status": "approved"})
+
+        patch_ideator = patch(
+            "social_agent.agents.ideator.IdeatorAgent.run",
+            return_value=MOCK_IDEAS_JSON,
+        )
+        with patch_ideator:
+            resp = client.post("/api/ideas/generate", json={
+                "seed_id": seed["id"],
+                "interests": "tech, python",
+            })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert "idea" in data
+        assert data["idea"]["title"] == "Generated Idea"
+        assert data["idea"]["summary"] == "Idea summary from LLM"
+        assert data["idea"]["seed_id"] == seed["id"]
+
+        seed_resp = client.get(f"/api/seeds/{seed['id']}")
+        assert seed_resp.json()["status"] == "used"
+
+    def test_generate_idea_dry_run(self, client):
+        seed = _create_test_seed(client)
+        client.patch(f"/api/seeds/{seed['id']}", json={"status": "approved"})
+
+        patch_ideator = patch(
+            "social_agent.agents.ideator.IdeatorAgent.run",
+            return_value=MOCK_IDEAS_JSON,
+        )
+        with patch_ideator:
+            resp = client.post("/api/ideas/generate", json={
+                "seed_id": seed["id"],
+                "interests": "tech",
+                "dry_run": True,
+            })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["raw_response"] is not None
+        assert data["idea"] is None
+
+    def test_get_idea(self, client):
+        idea = _create_test_idea(client)
+        resp = client.get(f"/api/ideas/{idea['id']}")
+        assert resp.status_code == 200
+        assert resp.json()["id"] == idea["id"]
+
+    def test_get_idea_not_found(self, client):
+        resp = client.get("/api/ideas/nonexistent")
+        assert resp.status_code == 404
+
+    def test_update_idea_status(self, client):
+        idea = _create_test_idea(client)
+        resp = client.patch(f"/api/ideas/{idea['id']}", json={"status": "discarded"})
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "discarded"
+
+    def test_update_idea_title(self, client):
+        idea = _create_test_idea(client)
+        resp = client.patch(f"/api/ideas/{idea['id']}", json={"title": "New Title"})
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "New Title"
+
+    def test_update_idea_not_found(self, client):
+        resp = client.patch("/api/ideas/nonexistent", json={"status": "discarded"})
+        assert resp.status_code == 404
+
+    def test_delete_idea(self, client):
+        idea = _create_test_idea(client)
+        resp = client.delete(f"/api/ideas/{idea['id']}")
+        assert resp.status_code == 204
+        get = client.get(f"/api/ideas/{idea['id']}")
+        assert get.status_code == 404
 
 
 # ── Drafts ──
@@ -304,19 +378,19 @@ class TestDraftsAPI:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_generate_drafts_seed_not_found(self, client):
+    def test_generate_drafts_idea_not_found(self, client):
         resp = client.post("/api/drafts/generate", json={
-            "seed_id": "nonexistent",
+            "idea_id": "nonexistent",
             "platforms": ["twitter"],
         })
         assert resp.status_code == 404
 
     def test_generate_drafts_success(self, client):
-        seed = _create_test_seed(client)
+        idea = _create_test_idea(client)
 
         with patch("social_agent.agents.writer.WriterAgent.run", return_value=MOCK_DRAFT):
             resp = client.post("/api/drafts/generate", json={
-                "seed_id": seed["id"],
+                "idea_id": idea["id"],
                 "platforms": ["twitter", "linkedin"],
             })
         assert resp.status_code == 201
@@ -326,25 +400,24 @@ class TestDraftsAPI:
         assert data["drafts"][0]["platform"] == "twitter"
         assert data["drafts"][1]["platform"] == "linkedin"
 
-        # Seed should be marked as used
-        seed_resp = client.get(f"/api/seeds/{seed['id']}")
-        assert seed_resp.json()["status"] == "used"
+        idea_resp = client.get(f"/api/ideas/{idea['id']}")
+        assert idea_resp.json()["status"] == "used"
 
     def test_generate_drafts_invalid_platform(self, client):
-        seed = _create_test_seed(client)
+        idea = _create_test_idea(client)
         resp = client.post("/api/drafts/generate", json={
-            "seed_id": seed["id"],
+            "idea_id": idea["id"],
             "platforms": ["nonexistent_platform"],
         })
         assert resp.status_code == 400
         assert "unknown" in resp.json()["detail"].lower()
 
     def test_generate_drafts_dry_run(self, client):
-        seed = _create_test_seed(client)
+        idea = _create_test_idea(client)
 
         with patch("social_agent.agents.writer.WriterAgent.run", return_value=MOCK_DRAFT):
             resp = client.post("/api/drafts/generate", json={
-                "seed_id": seed["id"],
+                "idea_id": idea["id"],
                 "platforms": ["twitter"],
                 "dry_run": True,
             })
@@ -442,7 +515,6 @@ class TestDraftsAPI:
         assert resp.status_code == 404
 
     def test_publish_with_uploaded_media(self, client):
-        """End-to-end: upload file → approve → publish with media."""
         draft = _create_test_draft(client)
 
         import io
@@ -586,21 +658,32 @@ def _create_test_seed(client) -> dict:
     _create_test_source(client)
 
     with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=MOCK_COLLECTED):
-        with patch("social_agent.agents.ideator.IdeatorAgent.run", return_value=MOCK_SEEDS_JSON):
-            resp = client.post("/api/seeds/generate", json={
-                "interests": "tech, python",
-            })
+        resp = client.post("/api/seeds/generate", json={})
 
     seeds = resp.json().get("seeds", [])
     return seeds[0] if seeds else {}
 
 
-def _create_test_draft(client) -> dict:
+def _create_test_idea(client) -> dict:
     seed = _create_test_seed(client)
+    client.patch(f"/api/seeds/{seed['id']}", json={"status": "approved"})
+
+    with patch("social_agent.agents.ideator.IdeatorAgent.run", return_value=MOCK_IDEAS_JSON):
+        resp = client.post("/api/ideas/generate", json={
+            "seed_id": seed["id"],
+            "interests": "tech",
+        })
+
+    idea = resp.json().get("idea", {})
+    return idea
+
+
+def _create_test_draft(client) -> dict:
+    idea = _create_test_idea(client)
 
     with patch("social_agent.agents.writer.WriterAgent.run", return_value=MOCK_DRAFT):
         resp = client.post("/api/drafts/generate", json={
-            "seed_id": seed["id"],
+            "idea_id": idea["id"],
             "platforms": ["twitter"],
         })
 

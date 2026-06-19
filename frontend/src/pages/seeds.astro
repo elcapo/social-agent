@@ -6,25 +6,46 @@ import Nav from "../components/Nav.astro";
 <Layout title="Seeds">
   <Nav />
   <main class="max-w-6xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 gap-2 flex-wrap">
       <h1 class="text-2xl font-bold">Seeds</h1>
-      <button class="btn btn-primary" id="btn-generate">Generate from sources</button>
+      <div class="flex gap-2">
+        <button class="btn btn-primary" id="btn-generate-interests">Generate from interests</button>
+        <button class="btn btn-primary" id="btn-generate-sources">Generate from sources</button>
+      </div>
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
     <div id="seeds-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
   </main>
 
-  <dialog id="generate-modal" class="modal">
+  <dialog id="interests-modal" class="modal">
     <div class="modal-box">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Generate Seeds</legend>
-        <label class="label">Interests</label>
-        <textarea id="interests" class="textarea w-full" rows="4">soberanía digital, ética digital, pedagogía digital</textarea>
+        <legend class="fieldset-legend text-xl font-bold">Generate from interests</legend>
+        <p class="text-sm text-base-content/50 mb-2">Enter keywords to match against source names and tags. Seeds will be generated from matching sources.</p>
+        <label class="label">Interests (comma-separated)</label>
+        <textarea id="interests-input" class="textarea w-full" rows="4" placeholder="soberanía digital, ética digital, pedagogía digital"></textarea>
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="gen-cancel">Cancel</button>
-        <button class="btn btn-primary" id="gen-generate">Generate</button>
+        <button class="btn" id="interests-cancel">Cancel</button>
+        <button class="btn btn-primary" id="interests-generate">Generate</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
+  <dialog id="sources-modal" class="modal">
+    <div class="modal-box max-w-lg">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold">Generate from sources</legend>
+        <p class="text-sm text-base-content/50 mb-2">Select the sources to collect from.</p>
+        <div id="sources-list-modal" class="max-h-64 overflow-y-auto space-y-2">
+          <span class="loading loading-spinner loading-sm"></span>
+        </div>
+      </fieldset>
+      <div class="modal-action">
+        <button class="btn" id="sources-cancel">Cancel</button>
+        <button class="btn btn-primary" id="sources-generate" disabled>Generate</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -59,7 +80,7 @@ import Nav from "../components/Nav.astro";
       const container = document.getElementById("seeds-list");
 
       if (!seeds.length) {
-        container.innerHTML = '<div class="alert bg-base-200 text-sm">No seeds yet. Click "Generate from sources" to create some.</div>';
+        container.innerHTML = '<div class="alert bg-base-200 text-sm">No seeds yet. Click "Generate from interests" or "Generate from sources" to create some.</div>';
         return;
       }
 
@@ -70,20 +91,23 @@ import Nav from "../components/Nav.astro";
           <li class="list-row items-center gap-3 py-3">
             <div class="min-w-0 flex-1 max-w-[75%]">
               <div class="font-medium">${esc(s.title)}</div>
-              <div class="text-xs text-base-content/40 mb-1">${esc(s.summary)}</div>
+              <div class="text-xs text-base-content/40 mb-1">${esc(s.source_name || "")}</div>
               ${s.source_url
                 ? `<div class="flex items-center gap-1 text-sm text-base-content/50">
                     <a href="${esc(s.source_url)}" target="_blank" rel="noopener noreferrer" class="truncate max-w-[200px] hover:text-primary transition-colors" title="${esc(s.source_url)}">${esc(domain)}</a>
                     <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${esc(s.source_url)}" aria-label="Copy URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                   </div>`
                 : ''}
+              <div class="flex flex-wrap gap-1 mt-1">
+                ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
+              </div>
             </div>
             <div class="flex items-center gap-2 shrink-0 ml-auto">
-              <span class="badge badge-md badge-soft whitespace-nowrap ${s.status === "pending" ? "badge-warning" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span>
+              <span class="badge badge-md badge-soft whitespace-nowrap ${s.status === "pending" ? "badge-warning" : s.status === "approved" ? "badge-info" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span>
               <span class="text-sm text-base-content/40 whitespace-nowrap">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</span>
               <div class="flex gap-1">${s.status === "pending"
-                ? `<a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a><button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${s.id}" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`
-                : `<a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Edit seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a><button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}</div>
+                ? `<button class="btn btn-square btn-ghost btn-sm text-info" data-action="approve" data-id="${s.id}" aria-label="Approve seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button><button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${s.id}" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`
+                : `<button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Approve seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button><button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}</div>
             </div>
           </li>`}).join("")}
       </ul>`;
@@ -111,6 +135,14 @@ import Nav from "../components/Nav.astro";
           });
           if (!res.ok) throw new Error(await getErrorMessage(res));
           load();
+        } else if (btn.dataset.action === "approve") {
+          const res = await fetch(`${API}/seeds/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "approved" }),
+          });
+          if (!res.ok) throw new Error(await getErrorMessage(res));
+          load();
         } else if (btn.dataset.action === "copy-url") {
           try {
             await navigator.clipboard.writeText(btn.dataset.url);
@@ -130,20 +162,120 @@ import Nav from "../components/Nav.astro";
       }
     });
 
-    document.getElementById("btn-generate").addEventListener("click", () => {
+    // ── Generate from interests ──
+
+    document.getElementById("btn-generate-interests").addEventListener("click", () => {
       hideError();
-      document.getElementById("generate-modal").showModal();
+      document.getElementById("interests-input").value = "";
+      document.getElementById("interests-modal").showModal();
     });
 
-    document.getElementById("gen-cancel").addEventListener("click", () => {
-      document.getElementById("generate-modal").close();
+    document.getElementById("interests-cancel").addEventListener("click", () => {
+      document.getElementById("interests-modal").close();
     });
 
-    document.getElementById("gen-generate").addEventListener("click", async () => {
-      const interests = document.getElementById("interests").value;
-      if (!interests.trim()) { showError("Please enter interests."); return; }
+    document.getElementById("interests-generate").addEventListener("click", async () => {
+      const raw = document.getElementById("interests-input").value.trim();
+      if (!raw) { showError("Please enter at least one interest keyword."); return; }
 
-      const btn = document.getElementById("gen-generate");
+      const keywords = raw.split(",").map(k => k.trim().toLowerCase()).filter(Boolean);
+      if (!keywords.length) { showError("Please enter at least one interest keyword."); return; }
+
+      const btn = document.getElementById("interests-generate");
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+      hideError();
+
+      try {
+        const sourcesRes = await fetch(`${API}/sources`);
+        const sources = await sourcesRes.json();
+
+        const matchingIds = sources
+          .filter(s => s.enabled !== false && (
+            keywords.some(k => s.name.toLowerCase().includes(k))
+            || (s.tags || []).some(t => keywords.some(k => t.toLowerCase().includes(k)))
+          ))
+          .map(s => s.id);
+
+        if (!matchingIds.length) {
+          showError("No sources match your interests. Add sources with matching tags first.");
+          btn.disabled = false;
+          btn.textContent = "Generate";
+          return;
+        }
+
+        const res = await fetch(`${API}/seeds/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source_ids: matchingIds }),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+
+        document.getElementById("interests-modal").close();
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Generate";
+      }
+    });
+
+    // ── Generate from sources ──
+
+    async function loadSourceCheckboxes() {
+      try {
+        const res = await fetch(`${API}/sources`);
+        const sources = await res.json();
+        const container = document.getElementById("sources-list-modal");
+
+        if (!sources.length) {
+          container.innerHTML = '<div class="text-sm text-base-content/40">No sources configured.</div>';
+          return;
+        }
+
+        container.innerHTML = sources.map(s => `
+          <label class="flex items-center gap-3 p-2 rounded-box hover:bg-base-200 cursor-pointer ${s.enabled === false ? "opacity-40" : ""}">
+            <input type="checkbox" class="checkbox checkbox-sm source-checkbox" data-id="${esc(s.id)}" ${s.enabled !== false ? "" : "disabled"} />
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-medium">${esc(s.name)}</div>
+              <div class="text-xs text-base-content/40">${esc(s.source_type)} ${s.tags?.length ? "— " + s.tags.map(t => esc(t)).join(", ") : ""}</div>
+            </div>
+          </label>
+        `).join("");
+
+        container.querySelectorAll(".source-checkbox").forEach(cb => {
+          cb.addEventListener("change", updateSourcesGenerateButton);
+        });
+        updateSourcesGenerateButton();
+      } catch {
+        document.getElementById("sources-list-modal").innerHTML = '<div class="text-sm text-error">Failed to load sources.</div>';
+      }
+    }
+
+    function updateSourcesGenerateButton() {
+      const checked = document.querySelectorAll(".source-checkbox:checked");
+      document.getElementById("sources-generate").disabled = checked.length === 0;
+    }
+
+    document.getElementById("btn-generate-sources").addEventListener("click", () => {
+      hideError();
+      document.getElementById("sources-list-modal").innerHTML = '<span class="loading loading-spinner loading-sm"></span>';
+      loadSourceCheckboxes();
+      document.getElementById("sources-modal").showModal();
+    });
+
+    document.getElementById("sources-cancel").addEventListener("click", () => {
+      document.getElementById("sources-modal").close();
+    });
+
+    document.getElementById("sources-generate").addEventListener("click", async () => {
+      const checked = document.querySelectorAll(".source-checkbox:checked");
+      const sourceIds = Array.from(checked).map(cb => cb.dataset.id);
+
+      if (!sourceIds.length) { showError("Select at least one source."); return; }
+
+      const btn = document.getElementById("sources-generate");
       btn.disabled = true;
       btn.textContent = "Generating...";
       hideError();
@@ -152,10 +284,11 @@ import Nav from "../components/Nav.astro";
         const res = await fetch(`${API}/seeds/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ interests }),
+          body: JSON.stringify({ source_ids: sourceIds }),
         });
         if (!res.ok) throw new Error(await getErrorMessage(res));
-        document.getElementById("generate-modal").close();
+
+        document.getElementById("sources-modal").close();
         load();
       } catch (e) {
         showError("Error: " + e.message);

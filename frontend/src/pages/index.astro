@@ -17,6 +17,10 @@ import Nav from "../components/Nav.astro";
         <div class="stat-title text-xs uppercase tracking-wider">Seeds</div>
         <div class="stat-value text-primary" id="stat-seeds">—</div>
       </a>
+      <a href="/ideas" class="stat no-underline hover:bg-base-200 transition-colors duration-150 cursor-pointer">
+        <div class="stat-title text-xs uppercase tracking-wider">Ideas</div>
+        <div class="stat-value text-primary" id="stat-ideas">—</div>
+      </a>
       <a href="/drafts?status=draft" class="stat no-underline hover:bg-base-200 transition-colors duration-150 cursor-pointer">
         <div class="stat-title text-xs uppercase tracking-wider">Pending</div>
         <div class="stat-value text-primary" id="stat-drafts">—</div>
@@ -47,9 +51,10 @@ import Nav from "../components/Nav.astro";
     const API = "http://localhost:8000/api";
 
     async function load() {
-      const [sources, seeds, drafts] = await Promise.all([
+      const [sources, seeds, ideas, drafts] = await Promise.all([
         fetch(`${API}/sources`).then(r => r.json()),
         fetch(`${API}/seeds`).then(r => r.json()),
+        fetch(`${API}/ideas`).then(r => r.json()),
         fetch(`${API}/drafts`).then(r => r.json()),
       ]);
 
@@ -58,6 +63,7 @@ import Nav from "../components/Nav.astro";
 
       document.getElementById("stat-sources").textContent = sources.length;
       document.getElementById("stat-seeds").textContent = seeds.length;
+      document.getElementById("stat-ideas").textContent = ideas.length;
       document.getElementById("stat-drafts").textContent = pending.length;
       document.getElementById("stat-published").textContent = published.length;
 

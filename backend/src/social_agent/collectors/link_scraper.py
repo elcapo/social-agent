@@ -8,6 +8,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .base import BaseCollector, CollectedItem
+from .playwright_utils import PlaywrightBrowser
 
 
 class LinkScraperCollector(BaseCollector):
@@ -27,7 +28,7 @@ class LinkScraperCollector(BaseCollector):
         self.full_content = self.config.get("full_content", True)
         self.url_pattern = self.config.get("url_pattern")
         self.renderer = self.config.get("renderer", "httpx")
-        self._browser = None
+        self._browser: PlaywrightBrowser | None = None
 
     def _default_pattern(self, base_url: str) -> re.Pattern:
         path = httpx.URL(base_url).path.rstrip("/")
@@ -46,8 +47,10 @@ class LinkScraperCollector(BaseCollector):
 
     def _extract_content(self, soup: BeautifulSoup) -> str:
         self._clean_soup(soup)
-        article = soup.find("article") or soup.find("main")
-        container = article or soup.find("body")
+        article = soup.find("article")
+        if article and len(article.get_text(strip=True)) < 500:
+            article = None
+        container = article or soup.find("main") or soup.find("body")
         if container is None:
             return ""
         text = container.get_text(separator="\n", strip=True)
@@ -75,50 +78,16 @@ class LinkScraperCollector(BaseCollector):
         soup = BeautifulSoup(response.text, "html.parser")
         return soup, str(response.url)
 
-    def _fetch_page_playwright(self, url: str) -> tuple[BeautifulSoup, str]:
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError:
-            raise ImportError(
-                "Playwright is required for renderer='playwright'. "
-                "Install it with: uv pip install playwright && python -m playwright install chromium"
-            )
-
-        if self._browser is None:
-            self._pw = sync_playwright().start()
-            try:
-                self._browser = self._pw.chromium.launch(headless=True)
-            except Exception:
-                self._pw.stop()
-                raise
-
-        page = self._browser.new_page()
-        try:
-            page.goto(url, wait_until="networkidle", timeout=30000)
-            html = page.content()
-            final_url = page.url
-        finally:
-            page.close()
-
-        soup = BeautifulSoup(html, "html.parser")
-        return soup, final_url
-
     def _fetch_page(self, url: str) -> tuple[BeautifulSoup, str]:
         if self.renderer == "playwright":
-            return self._fetch_page_playwright(url)
+            if self._browser is None:
+                self._browser = PlaywrightBrowser()
+            return self._browser.fetch_page(url)
         return self._fetch_page_httpx(url)
 
     def _close_browser(self) -> None:
-        if hasattr(self, "_pw"):
-            try:
-                self._pw.stop()
-            except Exception:
-                pass
         if self._browser is not None:
-            try:
-                self._browser.close()
-            except Exception:
-                pass
+            self._browser.close()
             self._browser = None
 
     def _fetch_article(self, url: str) -> str:

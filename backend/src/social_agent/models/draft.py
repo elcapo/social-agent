@@ -21,7 +21,7 @@ class DraftStatus(str, Enum):
 
 class Draft(BaseModel):
     id: str = Field(default_factory=lambda: f"draft_{_utcnow().timestamp():.6f}")
-    seed_id: str
+    idea_id: str
     platform: str
     content: str = ""
     status: DraftStatus = DraftStatus.draft
@@ -37,7 +37,7 @@ class Draft(BaseModel):
     def to_frontmatter(self) -> dict:
         fm = {
             "id": self.id,
-            "seed_id": self.seed_id,
+            "idea_id": self.idea_id,
             "platform": self.platform,
             "status": self.status.value,
             "notes": self.notes,

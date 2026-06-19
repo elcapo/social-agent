@@ -1,9 +1,14 @@
 import re
+import time
 from unittest.mock import MagicMock, patch
 
+from bs4 import BeautifulSoup
+import feedparser  # noqa: F401
+import feedparser.util
 import httpx
 from social_agent.collectors.base import BaseCollector, CollectedItem
 from social_agent.collectors.link_scraper import LinkScraperCollector
+from social_agent.collectors.rss import RSSCollector
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
 
 
@@ -63,6 +68,179 @@ class TestCollectedItem:
             tags=["a", "b"],
         )
         assert item.tags == ["a", "b"]
+
+
+FEED_XML = """<?xml version="1.0"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Article One</title>
+      <link>https://example.com/article-1</link>
+      <description>Summary of article one</description>
+      <pubDate>Mon, 01 Jan 2026 00:00:00 +0000</pubDate>
+    </item>
+    <item>
+      <title>Article Two</title>
+      <link>https://example.com/article-2</link>
+      <description>Summary of article two</description>
+      <pubDate>Tue, 02 Jan 2026 00:00:00 +0000</pubDate>
+    </item>
+  </channel>
+</rss>"""
+
+ARTICLE_HTML_FULL = """<html><body>
+  <nav><a href="/">Home</a></nav>
+  <article>
+    <h1>Article One</h1>
+    <p>This is the first paragraph of the article.</p>
+    <p>This is the second paragraph with more <strong>detail</strong>.</p>
+    <ul><li>Point A</li><li>Point B</li></ul>
+  </article>
+  <footer>Footer stuff</footer>
+</body></html>"""
+
+
+class TestRSSCollector:
+    def test_fetch_uses_summary_by_default(self):
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_entry_1 = feedparser.util.FeedParserDict({
+                "title": "Article One",
+                "link": "https://example.com/article-1",
+                "summary": "Summary of article one",
+                "published_parsed": time.struct_time((2026, 1, 1, 0, 0, 0, 0, 0, 0)),
+            })
+            mock_entry_2 = feedparser.util.FeedParserDict({
+                "title": "Article Two",
+                "link": "https://example.com/article-2",
+                "summary": "Summary of article two",
+                "published_parsed": time.struct_time((2026, 1, 2, 0, 0, 0, 0, 0, 0)),
+            })
+            mock_parse.return_value.entries = [mock_entry_1, mock_entry_2]
+
+            c = RSSCollector("src_1", "Test RSS", "https://example.com/feed")
+            items = c.fetch()
+
+        assert len(items) == 2
+        assert items[0].content == "Summary of article two"
+        assert items[1].content == "Summary of article one"
+
+    def test_fetch_full_content(self):
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_entry_1 = feedparser.util.FeedParserDict({
+                "title": "Article One",
+                "link": "https://example.com/article-1",
+                "summary": "Summary of article one",
+                "published_parsed": time.struct_time((2026, 1, 1, 0, 0, 0, 0, 0, 0)),
+            })
+            mock_parse.return_value.entries = [mock_entry_1]
+
+            with patch("social_agent.collectors.rss.httpx.get") as mock_get:
+                mock_get.return_value = MagicMock(
+                    status_code=200,
+                    text=ARTICLE_HTML_FULL,
+                )
+                c = RSSCollector(
+                    "src_1", "Test RSS", "https://example.com/feed",
+                    config={"full_content": True},
+                )
+                items = c.fetch()
+
+        assert len(items) == 1
+        assert "Summary of article one" not in items[0].content
+        assert "<h1>Article One</h1>" in items[0].content
+        assert "first paragraph" in items[0].content
+        assert "second paragraph" in items[0].content
+        assert "<strong>detail</strong>" in items[0].content
+        assert "<li>Point A</li>" in items[0].content
+
+    def test_full_content_http_error_returns_empty(self):
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_entry_1 = feedparser.util.FeedParserDict({
+                "title": "Article One",
+                "link": "https://example.com/article-1",
+                "summary": "Summary of article one",
+            })
+            mock_parse.return_value.entries = [mock_entry_1]
+
+            with patch("social_agent.collectors.rss.httpx.get") as mock_get:
+                mock_get.side_effect = httpx.HTTPStatusError(
+                    "404", request=MagicMock(),
+                    response=MagicMock(status_code=404),
+                )
+                c = RSSCollector(
+                    "src_1", "Test RSS", "https://example.com/feed",
+                    config={"full_content": True},
+                )
+                items = c.fetch()
+
+        assert len(items) == 1
+        assert items[0].content == ""
+
+    def test_full_content_config_defaults_to_false(self):
+        c = RSSCollector("src_1", "Test RSS", "https://example.com/feed")
+        assert c.full_content is False
+
+    def test_renderer_defaults_to_httpx(self):
+        c = RSSCollector("src_1", "Test RSS", "https://example.com/feed")
+        assert c.renderer == "httpx"
+
+    def test_renderer_playwright_from_config(self):
+        c = RSSCollector(
+            "src_1", "Test RSS", "https://example.com/feed",
+            config={"renderer": "playwright"},
+        )
+        assert c.renderer == "playwright"
+
+    def test_fetch_full_content_with_playwright(self):
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_entry = feedparser.util.FeedParserDict({
+                "title": "Article One",
+                "link": "https://example.com/article-1",
+                "summary": "Summary",
+                "published_parsed": time.struct_time((2026, 1, 1, 0, 0, 0, 0, 0, 0)),
+            })
+            mock_parse.return_value.entries = [mock_entry]
+
+            with patch("social_agent.collectors.rss.PlaywrightBrowser") as MockPW:
+                mock_browser = MagicMock()
+                mock_browser.fetch_page.return_value = (
+                    BeautifulSoup(ARTICLE_HTML_FULL, "html.parser"),
+                    "https://example.com/article-1",
+                )
+                MockPW.return_value.__enter__.return_value = mock_browser
+
+                c = RSSCollector(
+                    "src_1", "Test RSS", "https://example.com/feed",
+                    config={"full_content": True, "renderer": "playwright"},
+                )
+                items = c.fetch()
+
+        assert len(items) == 1
+        assert "first paragraph" in items[0].content
+        assert "<strong>detail</strong>" in items[0].content
+
+    def test_fetch_playwright_http_error_returns_empty(self):
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_entry = feedparser.util.FeedParserDict({
+                "title": "Article One",
+                "link": "https://example.com/article-1",
+                "summary": "Summary",
+            })
+            mock_parse.return_value.entries = [mock_entry]
+
+            with patch("social_agent.collectors.rss.PlaywrightBrowser") as MockPW:
+                mock_browser = MagicMock()
+                mock_browser.fetch_page.side_effect = Exception("fetch failed")
+                MockPW.return_value.__enter__.return_value = mock_browser
+
+                c = RSSCollector(
+                    "src_1", "Test RSS", "https://example.com/feed",
+                    config={"full_content": True, "renderer": "playwright"},
+                )
+                items = c.fetch()
+
+        assert len(items) == 1
+        assert items[0].content == ""
 
 
 class TestTwitterCollector:

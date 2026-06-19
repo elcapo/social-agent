@@ -5,6 +5,7 @@ backend/src/social_agent/config.py
 backend/src/social_agent/llm.py
 backend/src/social_agent/main.py
 backend/src/social_agent/media.py
+backend/src/social_agent/utils.py
 backend/src/social_agent.egg-info/PKG-INFO
 backend/src/social_agent.egg-info/SOURCES.txt
 backend/src/social_agent.egg-info/dependency_links.txt
@@ -17,6 +18,7 @@ backend/src/social_agent/agents/ideator.py
 backend/src/social_agent/agents/writer.py
 backend/src/social_agent/api/__init__.py
 backend/src/social_agent/api/router_drafts.py
+backend/src/social_agent/api/router_ideas.py
 backend/src/social_agent/api/router_publish.py
 backend/src/social_agent/api/router_seeds.py
 backend/src/social_agent/api/router_sources.py
@@ -25,11 +27,13 @@ backend/src/social_agent/cli/commands.py
 backend/src/social_agent/cli/linkedin_auth.py
 backend/src/social_agent/collectors/__init__.py
 backend/src/social_agent/collectors/base.py
+backend/src/social_agent/collectors/link_scraper.py
 backend/src/social_agent/collectors/rss.py
 backend/src/social_agent/collectors/scraper.py
 backend/src/social_agent/collectors/social.py
 backend/src/social_agent/models/__init__.py
 backend/src/social_agent/models/draft.py
+backend/src/social_agent/models/idea.py
 backend/src/social_agent/models/seed.py
 backend/src/social_agent/models/source.py
 backend/src/social_agent/publishers/__init__.py

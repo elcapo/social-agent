@@ -18,6 +18,7 @@ dependencies = [
     "tweepy>=4.16",
     "Pillow>=10.0",
     "python-multipart>=0.0.9",
+    "markdownify>=1.2.2",
 ]
 
 [project.optional-dependencies]

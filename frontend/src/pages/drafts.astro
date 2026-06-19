@@ -8,7 +8,7 @@ import Nav from "../components/Nav.astro";
   <main class="max-w-6xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold">Drafts</h1>
-      <button class="btn btn-primary" id="btn-generate">Generate from seed</button>
+      <button class="btn btn-primary" id="btn-generate">Generate from idea</button>
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
@@ -19,9 +19,9 @@ import Nav from "../components/Nav.astro";
     <div class="modal-box">
       <fieldset class="fieldset">
         <legend class="fieldset-legend text-xl font-bold">Generate Drafts</legend>
-        <label class="label">Seed</label>
-        <select id="seed-select" class="select w-full">
-          <option value="">Loading seeds...</option>
+        <label class="label">Idea</label>
+        <select id="idea-select" class="select w-full">
+          <option value="">Loading ideas...</option>
         </select>
         <label class="label">Platforms</label>
         <label class="label cursor-pointer justify-start gap-3">
@@ -311,13 +311,13 @@ import Nav from "../components/Nav.astro";
     document.getElementById("btn-generate").addEventListener("click", async () => {
       hideError();
       const modal = document.getElementById("generate-modal");
-      const select = document.getElementById("seed-select");
+      const select = document.getElementById("idea-select");
 
-      const res = await fetch(`${API}/seeds?status=pending`);
-      const seeds = await res.json();
-      select.innerHTML = seeds.length
-        ? seeds.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join("")
-        : '<option value="">No pending seeds available</option>';
+      const res = await fetch(`${API}/ideas?status=pending`);
+      const ideas = await res.json();
+      select.innerHTML = ideas.length
+        ? ideas.map(i => `<option value="${i.id}">${esc(i.title)}</option>`).join("")
+        : '<option value="">No pending ideas available</option>';
 
       modal.showModal();
     });
@@ -327,8 +327,8 @@ import Nav from "../components/Nav.astro";
     });
 
     document.getElementById("modal-generate").addEventListener("click", async () => {
-      const seedId = document.getElementById("seed-select").value;
-      if (!seedId) { showError("Select a seed first."); return; }
+      const ideaId = document.getElementById("idea-select").value;
+      if (!ideaId) { showError("Select an idea first."); return; }
 
       const checkboxes = document.querySelectorAll("#generate-modal input[type=checkbox]:checked");
       const platforms = Array.from(checkboxes).map(cb => cb.value);
@@ -343,7 +343,7 @@ import Nav from "../components/Nav.astro";
         const res = await fetch(`${API}/drafts/generate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seed_id: seedId, platforms }),
+          body: JSON.stringify({ idea_id: ideaId, platforms }),
         });
         if (!res.ok) throw new Error(await getErrorMsg(res));
         document.getElementById("generate-modal").close();

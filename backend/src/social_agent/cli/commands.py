@@ -11,16 +11,20 @@ from social_agent.collectors import LinkScraperCollector, RSSCollector, WebScrap
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
 from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
+from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.models.source import Source, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.utils import html_to_markdown
 
 DATA_DIR = Path("data")
 SEEDS_DIR = DATA_DIR / "seeds"
+IDEAS_DIR = DATA_DIR / "ideas"
 DRAFTS_DIR = DATA_DIR / "drafts"
 SOURCES_DIR = DATA_DIR / "sources"
 
 seed_store = MarkdownStore[Seed](SEEDS_DIR, Seed)
+idea_store = MarkdownStore[Idea](IDEAS_DIR, Idea)
 draft_store = MarkdownStore[Draft](DRAFTS_DIR, Draft)
 source_store = MarkdownStore[Source](SOURCES_DIR, Source)
 
@@ -117,13 +121,13 @@ def sources_add(name: str, source_type: str, url: str, priority: int, tags: str,
 
 @cli.group()
 def seeds() -> None:
-    """Manage seed ideas."""
+    """Manage collected articles (seeds)."""
 
 
 def _build_collector(source: Source):
     match source.source_type:
         case SourceType.rss:
-            return RSSCollector(source.id, source.name, source.url, source.tags)
+            return RSSCollector(source.id, source.name, source.url, source.tags, config=source.config)
         case SourceType.webpage:
             return WebScraperCollector(source.id, source.name, source.url, source.tags)
         case SourceType.link_scraper:
@@ -145,24 +149,10 @@ def _build_collector(source: Source):
 
 
 @seeds.command("generate")
-@click.option("--interests", default=None, help="Path to interests prompt file")
 @click.option("--source-id", multiple=True, help="Filter by source ID(s) (may be repeated)")
 @click.option("--force", is_flag=True, help="Allow duplicate seeds for same URL")
-@click.option("--dry-run", is_flag=True, help="Show raw LLM response without saving seeds")
-def seeds_generate(
-    interests: str | None, source_id: tuple[str, ...], force: bool, dry_run: bool,
-) -> None:
-    """Generate seed ideas from sources + interests."""
-    interests_path = Path(interests) if interests else settings.prompts_dir / "interests.md"
-    if not interests_path.exists():
-        click.echo(f"Interests file not found: {interests_path}")
-        click.echo("Create it from template: cp templates/prompts/interests.md data/prompts/")
-        return
-
-    with open(interests_path) as f:
-        post = frontmatter.load(f)
-        interests_text = post.content.strip()
-
+def seeds_generate(source_id: tuple[str, ...], force: bool) -> None:
+    """Collect articles from sources and save as seeds."""
     sources = source_store.list(filter_fn=lambda s: s.enabled)
     if source_id:
         sources = [s for s in sources if s.id in source_id]
@@ -180,10 +170,11 @@ def seeds_generate(
         existing = seed_store.list()
         existing_urls = {
             s.source_url for s in existing
-            if s.source_url and s.status == SeedStatus.pending
+            if s.source_url and s.status in (SeedStatus.pending, SeedStatus.approved)
         }
 
-    all_items = []
+    created = 0
+    skipped = 0
     for src in sources:
         collector = _build_collector(src)
         if collector is None:
@@ -191,45 +182,36 @@ def seeds_generate(
         click.echo(f"Fetching: {src.name} ({src.source_type.value})...")
         try:
             items = collector.fetch()
-            all_items.extend(items)
             click.echo(f"  -> {len(items)} items")
-            for it in items:
-                preview = it.content[:120].replace("\n", " ")
-                click.echo(f"      [{len(it.content):4d}c] {preview}...")
+            for item in items:
+                if not force and item.url and item.url in existing_urls:
+                    click.echo(f"  Skipped (duplicate URL): {item.title}")
+                    skipped += 1
+                    continue
+                content = html_to_markdown(item.content)
+                seed = Seed(
+                    title=item.title,
+                    content=content,
+                    source_id=item.source_id,
+                    source_url=item.url,
+                    source_name=item.source_name,
+                    tags=item.tags,
+                )
+                seed_store.save(seed)
+                created += 1
+                preview = seed.content[:80].replace("\n", " ")
+                click.echo(f"  Created: {seed.id} - {seed.title}")
+                click.echo(f"    {preview}...")
         except Exception as e:
             click.echo(f"  -> Error: {e}")
 
-    if not all_items:
-        click.echo("No content collected from any source.")
-        return
-
-    click.echo(f"\nGenerating seeds with Ideator ({len(all_items)} items)...")
-    ideator = IdeatorAgent()
-    result = ideator.generate_seeds(interests_text, all_items, dry_run=dry_run)
-
-    if dry_run:
-        import textwrap
-        click.echo("\n── Raw LLM response ──")
-        click.echo(textwrap.indent(str(result), "  "))
-        click.echo("─────────────────────")
-        return
-
-    skipped = 0
-    for seed in result:
-        if not force and seed.source_url and seed.source_url in existing_urls:
-            click.echo(f"  Skipped (duplicate URL): {seed.title}")
-            skipped += 1
-            continue
-        seed_store.save(seed)
-        click.echo(f"  Created: {seed.id} - {seed.title}")
-
-    click.echo(f"\nDone. {len(result) - skipped} seeds generated ({skipped} duplicates skipped).")
+    click.echo(f"\nDone. {created} seeds created ({skipped} duplicates skipped).")
 
 
 @seeds.command("list")
-@click.option("--status", default=None, help="Filter by status (pending, used, discarded)")
+@click.option("--status", default=None, help="Filter by status (pending, approved, used, discarded)")
 def seeds_list(status: str | None) -> None:
-    """List seed ideas."""
+    """List collected seeds."""
     def _match_status(s: Seed) -> bool:
         return s.status.value == status
 
@@ -245,7 +227,7 @@ def seeds_list(status: str | None) -> None:
 @seeds.command("show")
 @click.argument("seed_id")
 def seeds_show(seed_id: str) -> None:
-    """Show a seed idea."""
+    """Show a collected seed."""
     seed = seed_store.get(seed_id)
     if not seed:
         click.echo(f"Seed '{seed_id}' not found.")
@@ -254,13 +236,34 @@ def seeds_show(seed_id: str) -> None:
     click.echo(f"Title:     {seed.title}")
     click.echo(f"Status:    {seed.status.value}")
     click.echo(f"Source:    {seed.source_url or seed.source_id or '(none)'}")
-    click.echo(f"Summary:   {seed.summary}")
+    click.echo(f"Source:    {seed.source_name}")
+    click.echo(f"Tags:      {', '.join(seed.tags) if seed.tags else '(none)'}")
+    click.echo("─" * 40)
+    click.echo(seed.content[:2000] if seed.content else "(empty)")
+    if len(seed.content) > 2000:
+        click.echo(f"... ({len(seed.content) - 2000} more characters)")
+
+
+@seeds.command("approve")
+@click.argument("seed_id")
+def seeds_approve(seed_id: str) -> None:
+    """Approve a seed for idea generation."""
+    seed = seed_store.get(seed_id)
+    if not seed:
+        click.echo(f"Seed '{seed_id}' not found.")
+        return
+    if seed.status != SeedStatus.pending:
+        click.echo(f"Seed '{seed_id}' is {seed.status.value}. Only pending seeds can be approved.")
+        return
+    seed.status = SeedStatus.approved
+    seed_store.save(seed)
+    click.echo(f"Seed '{seed_id}' approved.")
 
 
 @seeds.command("discard")
 @click.argument("seed_id")
 def seeds_discard(seed_id: str) -> None:
-    """Discard a seed idea."""
+    """Discard a seed."""
     seed = seed_store.get(seed_id)
     if not seed:
         click.echo(f"Seed '{seed_id}' not found.")
@@ -268,6 +271,105 @@ def seeds_discard(seed_id: str) -> None:
     seed.status = SeedStatus.discarded
     seed_store.save(seed)
     click.echo(f"Seed '{seed_id}' discarded.")
+
+
+# ── Ideas ──
+
+
+@cli.group()
+def ideas() -> None:
+    """Manage generated ideas."""
+
+
+@ideas.command("generate")
+@click.argument("seed_id")
+@click.option("--interests", default=None, help="Path to interests prompt file")
+@click.option("--dry-run", is_flag=True, help="Show raw LLM response without saving")
+def ideas_generate(seed_id: str, interests: str | None, dry_run: bool) -> None:
+    """Generate an idea from an approved seed."""
+    seed = seed_store.get(seed_id)
+    if not seed:
+        click.echo(f"Seed '{seed_id}' not found.")
+        return
+
+    if seed.status != SeedStatus.approved:
+        click.echo(f"Seed '{seed_id}' is {seed.status.value}. Only approved seeds can generate ideas.")
+        return
+
+    interests_path = Path(interests) if interests else settings.prompts_dir / "interests.md"
+    if not interests_path.exists():
+        click.echo(f"Interests file not found: {interests_path}")
+        return
+
+    with open(interests_path) as f:
+        post = frontmatter.load(f)
+        interests_text = post.content.strip()
+
+    click.echo(f"Generating idea from seed '{seed_id}'...")
+    ideator = IdeatorAgent()
+    result = ideator.generate_idea(seed, interests_text, dry_run=dry_run)
+
+    if dry_run:
+        import textwrap
+        click.echo("\n── Raw LLM response ──")
+        click.echo(textwrap.indent(str(result), "  "))
+        click.echo("─────────────────────")
+        return
+
+    if result is None:
+        click.echo("Ideator returned an invalid response.")
+        return
+
+    idea_store.save(result)
+    seed.status = SeedStatus.used
+    seed_store.save(seed)
+    click.echo(f"  Created: {result.id} - {result.title}")
+    click.echo(f"  Summary: {result.summary}")
+
+
+@ideas.command("list")
+@click.option("--status", default=None, help="Filter by status (pending, used, discarded)")
+def ideas_list(status: str | None) -> None:
+    """List generated ideas."""
+    def _match_status(i: Idea) -> bool:
+        return i.status.value == status
+
+    filter_fn = _match_status if status else None
+    items = idea_store.list(filter_fn)
+    if not items:
+        click.echo("No ideas found.")
+        return
+    for i in items:
+        click.echo(f"  [{i.id}] {i.title} ({i.status.value})")
+
+
+@ideas.command("show")
+@click.argument("idea_id")
+def ideas_show(idea_id: str) -> None:
+    """Show a generated idea."""
+    idea = idea_store.get(idea_id)
+    if not idea:
+        click.echo(f"Idea '{idea_id}' not found.")
+        return
+    click.echo(f"ID:        {idea.id}")
+    click.echo(f"Seed ID:   {idea.seed_id}")
+    click.echo(f"Title:     {idea.title}")
+    click.echo(f"Status:    {idea.status.value}")
+    click.echo(f"Source:    {idea.source_url or '(none)'}")
+    click.echo(f"Summary:   {idea.summary}")
+
+
+@ideas.command("discard")
+@click.argument("idea_id")
+def ideas_discard(idea_id: str) -> None:
+    """Discard a generated idea."""
+    idea = idea_store.get(idea_id)
+    if not idea:
+        click.echo(f"Idea '{idea_id}' not found.")
+        return
+    idea.status = IdeaStatus.discarded
+    idea_store.save(idea)
+    click.echo(f"Idea '{idea_id}' discarded.")
 
 
 # ── Drafts ──
@@ -279,18 +381,18 @@ def drafts() -> None:
 
 
 @drafts.command("generate")
-@click.argument("seed_id")
+@click.argument("idea_id")
 @click.option("--platform", "-p", multiple=True, help="Target platform(s)")
 @click.option("--dry-run", is_flag=True, help="Show raw LLM response without saving")
-def drafts_generate(seed_id: str, platform: tuple[str, ...], dry_run: bool) -> None:
-    """Generate drafts from a seed for one or more platforms."""
-    seed = seed_store.get(seed_id)
-    if not seed:
-        click.echo(f"Seed '{seed_id}' not found.")
+def drafts_generate(idea_id: str, platform: tuple[str, ...], dry_run: bool) -> None:
+    """Generate drafts from an idea for one or more platforms."""
+    idea = idea_store.get(idea_id)
+    if not idea:
+        click.echo(f"Idea '{idea_id}' not found.")
         return
 
-    if seed.status != SeedStatus.pending:
-        click.echo(f"Seed '{seed_id}' is {seed.status.value}. Only pending seeds can be used.")
+    if idea.status != IdeaStatus.pending:
+        click.echo(f"Idea '{idea_id}' is {idea.status.value}. Only pending ideas can be used.")
         return
 
     platforms_dir = settings.prompts_dir / "platforms"
@@ -324,7 +426,7 @@ def drafts_generate(seed_id: str, platform: tuple[str, ...], dry_run: bool) -> N
 
         click.echo(f"Generating {p} draft...")
         result = writer.generate_draft(
-            seed=seed,
+            idea=idea,
             platform=p,
             platform_instructions=instructions,
             platform_name=platform_name,
@@ -342,9 +444,9 @@ def drafts_generate(seed_id: str, platform: tuple[str, ...], dry_run: bool) -> N
             created.append(result)
 
     if not dry_run:
-        seed.status = SeedStatus.used
-        seed_store.save(seed)
-        click.echo(f"\nDone. {len(created)} draft(s) generated from seed '{seed_id}'.")
+        idea.status = IdeaStatus.used
+        idea_store.save(idea)
+        click.echo(f"\nDone. {len(created)} draft(s) generated from idea '{idea_id}'.")
 
 
 @drafts.command("list")
@@ -376,7 +478,7 @@ def drafts_show(draft_id: str) -> None:
         click.echo(f"Draft '{draft_id}' not found.")
         return
     click.echo(f"ID:       {draft.id}")
-    click.echo(f"Seed ID:  {draft.seed_id}")
+    click.echo(f"Idea ID:  {draft.idea_id}")
     click.echo(f"Platform: {draft.platform}")
     click.echo(f"Status:   {draft.status.value}")
     click.echo(f"Notes:    {draft.notes or ''}")

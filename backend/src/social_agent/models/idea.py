@@ -11,39 +11,35 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class SeedStatus(str, Enum):
+class IdeaStatus(str, Enum):
     pending = "pending"
-    approved = "approved"
     used = "used"
     discarded = "discarded"
 
 
-class Seed(BaseModel):
-    id: str = Field(default_factory=lambda: f"seed_{_utcnow().timestamp():.6f}")
+class Idea(BaseModel):
+    id: str = Field(default_factory=lambda: f"idea_{_utcnow().timestamp():.6f}")
+    seed_id: str
     title: str
-    content: str = ""
-    source_id: Optional[str] = None
+    summary: str
     source_url: Optional[str] = None
-    source_name: str = ""
-    tags: list[str] = []
-    status: SeedStatus = SeedStatus.pending
+    status: IdeaStatus = IdeaStatus.pending
     created_at: datetime = Field(default_factory=_utcnow)
 
     def to_frontmatter(self) -> dict:
         return {
             "id": self.id,
+            "seed_id": self.seed_id,
             "title": self.title,
-            "source_id": self.source_id,
+            "summary": self.summary,
             "source_url": self.source_url,
-            "source_name": self.source_name,
-            "tags": self.tags,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
         }
 
     @classmethod
-    def from_frontmatter(cls, data: dict) -> Seed:
-        data["status"] = SeedStatus(data["status"])
+    def from_frontmatter(cls, data: dict) -> Idea:
+        data["status"] = IdeaStatus(data["status"])
         if data.get("created_at"):
             data["created_at"] = datetime.fromisoformat(data["created_at"])
         return cls(**data)

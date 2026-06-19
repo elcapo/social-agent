@@ -21,7 +21,7 @@ class TestBasePublisher:
     def test_interface(self):
         p = _DummyPublisher()
         assert p.platform == "dummy"
-        result = p.publish(Draft(seed_id="s1", platform="dummy", content="hello"))
+        result = p.publish(Draft(idea_id="s1", platform="dummy", content="hello"))
         assert result.success is True
         assert result.platform_post_id == "dummy_123"
 
@@ -50,7 +50,7 @@ class TestTwitterPublisher:
         publisher = TwitterPublisher("ck", "cs", "at", "ats")
         publisher.client = mock_client
 
-        draft = Draft(seed_id="s1", platform="twitter", content="Hello world")
+        draft = Draft(idea_id="s1", platform="twitter", content="Hello world")
         result = publisher.publish(draft)
 
         assert result.success is True
@@ -66,7 +66,7 @@ class TestTwitterPublisher:
         publisher = TwitterPublisher("ck", "cs", "at", "ats")
         publisher.client = mock_client
 
-        draft = Draft(seed_id="s1", platform="twitter", content="Hello")
+        draft = Draft(idea_id="s1", platform="twitter", content="Hello")
         result = publisher.publish(draft)
 
         assert result.success is False
@@ -79,7 +79,7 @@ class TestTwitterPublisher:
         publisher = TwitterPublisher("ck", "cs", "at", "ats")
         publisher.client = mock_client
 
-        draft = Draft(seed_id="s1", platform="twitter", content="Hello")
+        draft = Draft(idea_id="s1", platform="twitter", content="Hello")
         result = publisher.publish(draft)
 
         assert result.success is False
@@ -101,7 +101,7 @@ class TestTwitterPublisher:
         publisher.api = mock_api
 
         draft = Draft(
-            seed_id="s1", platform="twitter", content="Hello",
+            idea_id="s1", platform="twitter", content="Hello",
             media_urls=["https://example.com/img.jpg"],
         )
 
@@ -131,7 +131,7 @@ class TestTwitterPublisher:
         publisher.api = mock_api
 
         draft = Draft(
-            seed_id="s1", platform="twitter", content="Hello",
+            idea_id="s1", platform="twitter", content="Hello",
             media_paths=["/tmp/local.jpg"],
         )
 
@@ -158,7 +158,7 @@ class TestTwitterPublisher:
         publisher.api = mock_api
 
         draft = Draft(
-            seed_id="s1", platform="twitter", content="Hello",
+            idea_id="s1", platform="twitter", content="Hello",
             media_urls=["https://example.com/bad.jpg"],
         )
 
@@ -175,7 +175,7 @@ class TestTwitterPublisher:
 
 class TestLinkedInPublisher:
     def test_publish_success(self, tmp_path):
-        draft = Draft(seed_id="s1", platform="linkedin", content="Post content")
+        draft = Draft(idea_id="s1", platform="linkedin", content="Post content")
 
         with patch.object(httpx, "get") as mock_get:
             mock_get.return_value = MagicMock(
@@ -196,7 +196,7 @@ class TestLinkedInPublisher:
         assert result.platform_post_id == "urn:li:post:xyz"
 
     def test_publish_with_custom_author_urn(self):
-        draft = Draft(seed_id="s1", platform="linkedin", content="Post content")
+        draft = Draft(idea_id="s1", platform="linkedin", content="Post content")
 
         with patch.object(httpx, "post") as mock_post:
             mock_post.return_value = MagicMock(
@@ -215,7 +215,7 @@ class TestLinkedInPublisher:
         assert result.platform_post_id == "urn:li:post:456"
 
     def test_publish_auth_failure(self):
-        draft = Draft(seed_id="s1", platform="linkedin", content="Post content")
+        draft = Draft(idea_id="s1", platform="linkedin", content="Post content")
 
         with patch.object(httpx, "get") as mock_get:
             mock_get.side_effect = httpx.HTTPStatusError(
@@ -231,7 +231,7 @@ class TestLinkedInPublisher:
         assert "Failed to resolve" in result.error
 
     def test_publish_api_error(self, tmp_path):
-        draft = Draft(seed_id="s1", platform="linkedin", content="Post content")
+        draft = Draft(idea_id="s1", platform="linkedin", content="Post content")
 
         with patch.object(httpx, "get") as mock_get:
             mock_get.return_value = MagicMock(
@@ -253,7 +253,7 @@ class TestLinkedInPublisher:
 
     def test_publish_with_media_success(self):
         draft = Draft(
-            seed_id="s1", platform="linkedin", content="Post with image",
+            idea_id="s1", platform="linkedin", content="Post with image",
             media_urls=["https://example.com/img.jpg"],
         )
 
@@ -295,7 +295,7 @@ class TestLinkedInPublisher:
 
     def test_publish_with_media_path(self):
         draft = Draft(
-            seed_id="s1", platform="linkedin", content="Post with local image",
+            idea_id="s1", platform="linkedin", content="Post with local image",
             media_paths=["/tmp/local.jpg"],
         )
 
@@ -336,7 +336,7 @@ class TestLinkedInPublisher:
 
     def test_publish_with_media_upload_failure(self):
         draft = Draft(
-            seed_id="s1", platform="linkedin", content="Post with image",
+            idea_id="s1", platform="linkedin", content="Post with image",
             media_urls=["https://example.com/img.jpg"],
         )
 
@@ -355,14 +355,14 @@ class TestLinkedInPublisher:
 
 class TestDraftPublishModel:
     def test_draft_defaults(self):
-        d = Draft(seed_id="s1", platform="twitter", content="hello")
+        d = Draft(idea_id="s1", platform="twitter", content="hello")
         assert d.platform_post_id is None
         assert d.publish_error is None
         assert d.publish_attempts == 0
 
     def test_draft_frontmatter_roundtrip(self):
         d = Draft(
-            seed_id="s1",
+            idea_id="s1",
             platform="twitter",
             content="hello",
             status=DraftStatus.published,
@@ -378,7 +378,7 @@ class TestDraftPublishModel:
 
     def test_draft_failed_status(self):
         d = Draft(
-            seed_id="s1",
+            idea_id="s1",
             platform="twitter",
             content="hello",
             status=DraftStatus.failed,

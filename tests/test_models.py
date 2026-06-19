@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from social_agent.models.draft import Draft, DraftStatus
+from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.models.source import Source, SourcePriority, SourceType
 
@@ -68,43 +69,92 @@ class TestSource:
 
 class TestSeed:
     def test_create_seed(self):
-        seed = Seed(title="My Idea", summary="A great idea for a post")
-        assert seed.title == "My Idea"
-        assert seed.summary == "A great idea for a post"
+        seed = Seed(title="My Article", content="Full markdown content")
+        assert seed.title == "My Article"
+        assert seed.content == "Full markdown content"
         assert seed.status == SeedStatus.pending
+        assert seed.tags == []
+        assert seed.source_name == ""
 
     def test_seed_roundtrip(self):
         seed = Seed(
-            title="Test Seed",
-            summary="Summary here",
+            title="Test Article",
+            content="Article body in **markdown**",
             source_id="src_123",
             source_url="https://example.com",
+            source_name="Test Source",
             tags=["ai", "ml"],
             status=SeedStatus.used,
         )
         fm = seed.to_frontmatter()
         restored = Seed.from_frontmatter(fm)
         assert restored.title == seed.title
-        assert restored.summary == seed.summary
         assert restored.source_id == seed.source_id
+        assert restored.source_url == seed.source_url
+        assert restored.source_name == seed.source_name
+        assert restored.tags == seed.tags
         assert restored.status == seed.status
 
     def test_seed_default_status(self):
-        seed = Seed(title="New", summary="New idea")
+        seed = Seed(title="New", content="Content")
         assert seed.status == SeedStatus.pending
+
+    def test_seed_approved_status(self):
+        seed = Seed(title="Approved", content="Content", status=SeedStatus.approved)
+        assert seed.status == SeedStatus.approved
+
+    def test_seed_content_preserved_in_roundtrip(self):
+        content = "# Title\n\nThis is the **full** article.\n\n- Point 1\n- Point 2"
+        seed = Seed(title="MD Content", content=content)
+        fm = seed.to_frontmatter()
+        restored = Seed.from_frontmatter(fm)
+        assert restored.content == ""
+
+
+class TestIdea:
+    def test_create_idea(self):
+        idea = Idea(seed_id="seed_123", title="My Idea", summary="A great idea")
+        assert idea.seed_id == "seed_123"
+        assert idea.title == "My Idea"
+        assert idea.summary == "A great idea"
+        assert idea.status == IdeaStatus.pending
+
+    def test_idea_roundtrip(self):
+        idea = Idea(
+            seed_id="seed_123",
+            title="Test Idea",
+            summary="Summary here",
+            source_url="https://example.com",
+            status=IdeaStatus.used,
+        )
+        fm = idea.to_frontmatter()
+        restored = Idea.from_frontmatter(fm)
+        assert restored.seed_id == idea.seed_id
+        assert restored.title == idea.title
+        assert restored.summary == idea.summary
+        assert restored.source_url == idea.source_url
+        assert restored.status == idea.status
+
+    def test_idea_default_status(self):
+        idea = Idea(seed_id="s1", title="New", summary="New idea")
+        assert idea.status == IdeaStatus.pending
+
+    def test_idea_default_id(self):
+        idea = Idea(seed_id="s1", title="New", summary="New")
+        assert idea.id.startswith("idea_")
 
 
 class TestDraft:
     def test_create_draft(self):
-        draft = Draft(seed_id="seed_123", platform="twitter", content="Hello world")
-        assert draft.seed_id == "seed_123"
+        draft = Draft(idea_id="idea_123", platform="twitter", content="Hello world")
+        assert draft.idea_id == "idea_123"
         assert draft.platform == "twitter"
         assert draft.content == "Hello world"
         assert draft.status == DraftStatus.draft
 
     def test_draft_roundtrip(self):
         draft = Draft(
-            seed_id="seed_123",
+            idea_id="idea_123",
             platform="linkedin",
             content="Post content here",
             status=DraftStatus.approved,
@@ -113,14 +163,14 @@ class TestDraft:
         fm = draft.to_frontmatter()
         fm["content"] = draft.content
         restored = Draft.from_frontmatter(fm)
-        assert restored.seed_id == draft.seed_id
+        assert restored.idea_id == draft.idea_id
         assert restored.platform == draft.platform
         assert restored.content == draft.content
         assert restored.status == draft.status
         assert restored.notes == draft.notes
 
     def test_draft_publish_flow(self):
-        draft = Draft(seed_id="seed_1", platform="twitter", content="Content")
+        draft = Draft(idea_id="idea_1", platform="twitter", content="Content")
         assert draft.status == DraftStatus.draft
         assert draft.published_at is None
 
@@ -133,13 +183,13 @@ class TestDraft:
         assert draft.published_at is not None
 
     def test_draft_media_urls_default(self):
-        draft = Draft(seed_id="s1", platform="twitter", content="Hello")
+        draft = Draft(idea_id="i1", platform="twitter", content="Hello")
         assert draft.media_urls == []
         assert draft.media_paths == []
 
     def test_draft_media_urls_roundtrip(self):
         draft = Draft(
-            seed_id="s1",
+            idea_id="i1",
             platform="twitter",
             content="Hello",
             media_urls=["https://example.com/img1.jpg", "https://example.com/img2.png"],
@@ -151,7 +201,7 @@ class TestDraft:
         assert restored.media_paths == []
 
     def test_draft_media_urls_empty_after_roundtrip(self):
-        draft = Draft(seed_id="s1", platform="twitter", content="No media")
+        draft = Draft(idea_id="i1", platform="twitter", content="No media")
         fm = draft.to_frontmatter()
         fm["content"] = draft.content
         restored = Draft.from_frontmatter(fm)
@@ -159,7 +209,7 @@ class TestDraft:
 
     def test_draft_media_paths_roundtrip(self):
         draft = Draft(
-            seed_id="s1", platform="twitter", content="Local",
+            idea_id="i1", platform="twitter", content="Local",
             media_paths=["/tmp/img1.jpg", "/tmp/img2.png"],
         )
         fm = draft.to_frontmatter()

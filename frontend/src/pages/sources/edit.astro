@@ -49,7 +49,7 @@ import Nav from "../../components/Nav.astro";
 
         <label class="label">Tags (comma-separated)</label>
         <input type="text" id="src-tags" class="input w-full" placeholder="tech, python" />
-        <div id="config-field" class="hidden">
+        <div id="config-field">
           <label class="label">Config (JSON)</label>
           <textarea id="src-config" class="textarea w-full font-mono text-sm" rows="3" placeholder='{"url_pattern": "/blog/.+", "max_items": 10}'></textarea>
         </div>
@@ -130,15 +130,20 @@ import Nav from "../../components/Nav.astro";
       document.getElementById("src-tags").value = (source.tags || []).join(", ");
       const configVal = source.config ? JSON.stringify(source.config, null, 2) : "";
       document.getElementById("src-config").value = configVal;
-      toggleConfigField();
+      updateConfigPlaceholder();
     }
 
-    function toggleConfigField() {
+    function updateConfigPlaceholder() {
       const type = document.getElementById("src-type").value;
-      document.getElementById("config-field").classList.toggle("hidden", type !== "link_scraper");
+      const placeholder = type === "rss"
+        ? '{"full_content": true}'
+        : type === "link_scraper"
+          ? '{"url_pattern": "/blog/.+", "max_items": 10}'
+          : '{"key": "value"}';
+      document.getElementById("src-config").placeholder = placeholder;
     }
 
-    document.getElementById("src-type").addEventListener("change", toggleConfigField);
+    document.getElementById("src-type").addEventListener("change", updateConfigPlaceholder);
 
     document.getElementById("btn-save").addEventListener("click", async () => {
       const name = document.getElementById("src-name").value.trim();

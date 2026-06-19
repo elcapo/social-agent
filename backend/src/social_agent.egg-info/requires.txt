@@ -12,7 +12,11 @@ python-frontmatter
 tweepy>=4.16
 Pillow>=10.0
 python-multipart>=0.0.9
+markdownify>=1.2.2
 
 [dev]
 pytest>=8.0
 ruff>=0.3
+
+[playwright]
+playwright>=1.40

@@ -39,7 +39,7 @@ import Nav from "../components/Nav.astro";
         </select>
         <label class="label">Tags (comma-separated)</label>
         <input type="text" id="src-tags" class="input w-full" placeholder="tech, python" />
-        <div id="config-field" class="hidden">
+        <div id="config-field">
           <label class="label">Config (JSON)</label>
           <textarea id="src-config" class="textarea w-full font-mono text-sm" rows="3" placeholder='{"url_pattern": "/blog/.+", "max_items": 10}'></textarea>
         </div>
@@ -138,16 +138,19 @@ import Nav from "../components/Nav.astro";
       document.getElementById("src-priority").value = "2";
       document.getElementById("src-tags").value = "";
       document.getElementById("src-config").value = "";
-      toggleConfigField();
+      document.getElementById("src-config").placeholder = '{"full_content": true}';
       document.getElementById("form-modal").showModal();
     }
 
-    function toggleConfigField() {
+    document.getElementById("src-type").addEventListener("change", () => {
       const type = document.getElementById("src-type").value;
-      document.getElementById("config-field").classList.toggle("hidden", type !== "link_scraper");
-    }
-
-    document.getElementById("src-type").addEventListener("change", toggleConfigField);
+      const placeholder = type === "rss"
+        ? '{"full_content": true}'
+        : type === "link_scraper"
+          ? '{"url_pattern": "/blog/.+", "max_items": 10}'
+          : '{"key": "value"}';
+      document.getElementById("src-config").placeholder = placeholder;
+    });
 
     document.getElementById("sources-list").addEventListener("click", async (e) => {
       const btn = e.target.closest("[data-action]");

@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from social_agent.agents.writer import WriterAgent, _extract_post
 from social_agent.models.draft import Draft, DraftStatus
-from social_agent.models.seed import Seed
+from social_agent.models.idea import Idea
 
 MOCK_DRAFT = "Este es un post genial para la plataforma."
 
@@ -11,18 +11,27 @@ RUN_PATH = "social_agent.agents.writer.WriterAgent.run"
 PLATFORM_INSTRUCTIONS = "Tono: Directo, técnico pero accesible."
 
 
+def _make_idea(title="Test Idea", summary="A summary", source_url=None):
+    return Idea(
+        seed_id="seed_1",
+        title=title,
+        summary=summary,
+        source_url=source_url,
+    )
+
+
 class TestWriterAgent:
     def test_generate_draft_returns_draft(self):
         with patch(RUN_PATH, return_value=MOCK_DRAFT):
             agent = WriterAgent()
-            seed = Seed(title="Test Idea", summary="A summary", tags=["tech"])
+            idea = _make_idea()
             draft = agent.generate_draft(
-                seed=seed,
+                idea=idea,
                 platform="twitter",
                 platform_instructions=PLATFORM_INSTRUCTIONS,
             )
             assert isinstance(draft, Draft)
-            assert draft.seed_id == seed.id
+            assert draft.idea_id == idea.id
             assert draft.platform == "twitter"
             assert draft.content == MOCK_DRAFT
             assert draft.status == DraftStatus.draft
@@ -30,9 +39,9 @@ class TestWriterAgent:
     def test_generate_draft_dry_run(self):
         with patch(RUN_PATH, return_value=MOCK_DRAFT):
             agent = WriterAgent()
-            seed = Seed(title="Test", summary="Sum", tags=[])
+            idea = _make_idea()
             result = agent.generate_draft(
-                seed=seed,
+                idea=idea,
                 platform="linkedin",
                 platform_instructions=PLATFORM_INSTRUCTIONS,
                 dry_run=True,
@@ -44,9 +53,9 @@ class TestWriterAgent:
         long_text = "a " * 500
         with patch(RUN_PATH, return_value=long_text):
             agent = WriterAgent()
-            seed = Seed(title="Test", summary="Sum", tags=[])
+            idea = _make_idea()
             draft = agent.generate_draft(
-                seed=seed,
+                idea=idea,
                 platform="twitter",
                 platform_instructions=PLATFORM_INSTRUCTIONS,
                 max_chars=50,
@@ -54,13 +63,16 @@ class TestWriterAgent:
             assert isinstance(draft, Draft)
             assert len(draft.content) <= 50
 
-    def test_generate_draft_includes_seed_info_in_prompt(self):
+    def test_generate_draft_includes_idea_info_in_prompt(self):
         with patch(RUN_PATH, return_value="content") as mock_run:
             agent = WriterAgent()
-            seed = Seed(title="My Title", summary="My Summary",
-                        source_url="https://example.com/article")
+            idea = _make_idea(
+                title="My Title",
+                summary="My Summary",
+                source_url="https://example.com/article",
+            )
             agent.generate_draft(
-                seed=seed,
+                idea=idea,
                 platform="twitter",
                 platform_instructions=PLATFORM_INSTRUCTIONS,
                 platform_name="Twitter / X",
@@ -72,12 +84,12 @@ class TestWriterAgent:
             assert PLATFORM_INSTRUCTIONS in prompt
             assert "https://example.com/article" in prompt
 
-    def test_generate_draft_with_empty_tags(self):
+    def test_generate_draft_with_minimal_idea(self):
         with patch(RUN_PATH, return_value="content"):
             agent = WriterAgent()
-            seed = Seed(title="No Tags", summary="No tags here")
+            idea = _make_idea(title="Minimal", summary="Minimal summary")
             draft = agent.generate_draft(
-                seed=seed,
+                idea=idea,
                 platform="twitter",
                 platform_instructions=PLATFORM_INSTRUCTIONS,
             )
@@ -100,9 +112,9 @@ class TestWriterAgent:
         mock_response = "Pensando...\n<post>Contenido final del post</post>"
         with patch(RUN_PATH, return_value=mock_response):
             agent = WriterAgent()
-            seed = Seed(title="Test", summary="Sum", tags=[])
+            idea = _make_idea()
             draft = agent.generate_draft(
-                seed=seed,
+                idea=idea,
                 platform="twitter",
                 platform_instructions=PLATFORM_INSTRUCTIONS,
             )

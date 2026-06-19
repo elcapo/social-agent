@@ -6,7 +6,6 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from social_agent.agents.ideator import IdeatorAgent
 from social_agent.collectors.base import CollectedItem
 from social_agent.collectors.link_scraper import LinkScraperCollector
 from social_agent.collectors.rss import RSSCollector
@@ -16,6 +15,7 @@ from social_agent.config import settings
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.models.source import Source, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.utils import html_to_markdown
 
 DATA_DIR = Path("data")
 seed_store = MarkdownStore[Seed](DATA_DIR / "seeds", Seed)
@@ -25,33 +25,31 @@ router = APIRouter(tags=["seeds"])
 
 
 class GenerateSeedsRequest(BaseModel):
-    interests: str
     source_ids: Optional[list[str]] = None
     force: bool = False
-    dry_run: bool = False
 
 
 class GenerateSeedsResponse(BaseModel):
-    seeds: list[Seed] | None = None
-    raw_response: str | None = None
+    seeds: list[Seed]
     skipped: int = 0
 
 
 class UpdateSeedRequest(BaseModel):
     status: Optional[str] = None
     title: Optional[str] = None
-    summary: Optional[str] = None
     source_url: Optional[str] = None
 
 
 def _build_collector(source: Source):
     match source.source_type:
         case SourceType.rss:
-            return RSSCollector(source.id, source.name, source.url, source.tags)
+            return RSSCollector(source.id, source.name, source.url, source.tags, config=source.config)
         case SourceType.webpage:
             return WebScraperCollector(source.id, source.name, source.url, source.tags)
         case SourceType.link_scraper:
-            return LinkScraperCollector(source.id, source.name, source.url, source.tags, config=source.config)
+            return LinkScraperCollector(
+                source.id, source.name, source.url, source.tags, config=source.config,
+            )
         case SourceType.social:
             if "twitter" in source.url:
                 return TwitterCollector(
@@ -68,11 +66,29 @@ def _build_collector(source: Source):
             return None
 
 
+def _collected_item_to_seed(item: CollectedItem) -> Seed:
+    content = html_to_markdown(item.content)
+    return Seed(
+        title=item.title,
+        content=content,
+        source_id=item.source_id,
+        source_url=item.url,
+        source_name=item.source_name,
+        tags=item.tags,
+        status=SeedStatus.pending,
+    )
+
+
 @router.get("/seeds")
-def list_seeds(status: Optional[str] = None) -> list[Seed]:
+def list_seeds(status: Optional[str] = None, approved: Optional[bool] = None) -> list[Seed]:
     def _filter(s: Seed) -> bool:
         if status and s.status.value != status:
             return False
+        if approved is not None:
+            if approved and s.status != SeedStatus.approved:
+                return False
+            if not approved and s.status == SeedStatus.approved:
+                return False
         return True
     items = seed_store.list(filter_fn=_filter)
     items.sort(key=lambda s: s.created_at or "", reverse=True)
@@ -109,28 +125,25 @@ def generate_seeds(body: GenerateSeedsRequest) -> GenerateSeedsResponse:
     if not all_items:
         raise HTTPException(400, "No content collected from any source")
 
-    ideator = IdeatorAgent()
-    result = ideator.generate_seeds(body.interests, all_items, dry_run=body.dry_run)
-
-    if body.dry_run:
-        return GenerateSeedsResponse(raw_response=str(result))
-
     existing_urls: set[str] = set()
     if not body.force:
         existing = seed_store.list()
         existing_urls = {
             s.source_url for s in existing
-            if s.source_url and s.status == SeedStatus.pending
+            if s.source_url and s.status in (SeedStatus.pending, SeedStatus.approved)
         }
 
+    seeds: list[Seed] = []
     skipped = 0
-    for seed in result:
-        if not body.force and seed.source_url and seed.source_url in existing_urls:
+    for item in all_items:
+        if not body.force and item.url and item.url in existing_urls:
             skipped += 1
             continue
+        seed = _collected_item_to_seed(item)
         seed_store.save(seed)
+        seeds.append(seed)
 
-    return GenerateSeedsResponse(seeds=result, skipped=skipped)
+    return GenerateSeedsResponse(seeds=seeds, skipped=skipped)
 
 
 @router.patch("/seeds/{seed_id}")
@@ -143,8 +156,6 @@ def update_seed(seed_id: str, body: UpdateSeedRequest) -> Seed:
         seed.status = SeedStatus(body.status)
     if body.title is not None:
         seed.title = body.title
-    if body.summary is not None:
-        seed.summary = body.summary
     if body.source_url is not None:
         seed.source_url = body.source_url
 

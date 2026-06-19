@@ -1,18 +1,10 @@
-from datetime import datetime, timezone
 from unittest.mock import patch
 
 from social_agent.agents.ideator import IdeatorAgent
-from social_agent.collectors.base import CollectedItem
+from social_agent.models.idea import Idea, IdeaStatus
+from social_agent.models.seed import Seed
 
-MOCK_SIMPLE = """[
-  {"title": "Idea 1", "summary": "Summary 1"},
-  {"title": "Idea 2", "summary": "Summary 2"}
-]"""
-
-MOCK_WITH_SOURCE = """[
-  {"title": "Idea 1", "summary": "Summary 1", "source_index": 1},
-  {"title": "Idea 2", "summary": "Summary 2", "source_index": 2}
-]"""
+MOCK_SIMPLE = """{"title": "Idea Title", "summary": "Idea summary text"}"""
 
 RUN_PATH = "social_agent.agents.ideator.IdeatorAgent.run"
 
@@ -22,80 +14,56 @@ def _with_side(effect: str):
 
 
 class TestIdeatorAgent:
-    def test_generate_seeds_empty_on_invalid_response(self):
+    def test_generate_idea_returns_none_on_invalid_response(self):
         with _with_side("not valid json"):
             agent = IdeatorAgent()
-            seeds = agent.generate_seeds("interests", [])
-            assert seeds == []
+            seed = Seed(title="Test", content="Article content")
+            result = agent.generate_idea(seed, "interests")
+            assert result is None
 
-    def test_generate_seeds_parses_json(self):
+    def test_generate_idea_returns_idea(self):
         with _with_side(MOCK_SIMPLE):
             agent = IdeatorAgent()
-            items = [
-                CollectedItem(
-                    title="Source Item",
-                    content="Content here",
-                    url="https://example.com",
-                    source_id="src_1",
-                    source_name="Test Source",
-                    published=datetime.now(timezone.utc),
-                )
-            ]
-            seeds = agent.generate_seeds("Some interests", items)
-            assert len(seeds) == 2
-            assert seeds[0].title == "Idea 1"
-            assert seeds[0].summary == "Summary 1"
-            assert seeds[0].status.value == "pending"
+            seed = Seed(
+                title="Test Article",
+                content="Full article markdown content",
+                source_url="https://example.com/article",
+            )
+            result = agent.generate_idea(seed, "Tech interests")
+            assert isinstance(result, Idea)
+            assert result.title == "Idea Title"
+            assert result.summary == "Idea summary text"
+            assert result.seed_id == seed.id
+            assert result.source_url == "https://example.com/article"
+            assert result.status == IdeaStatus.pending
 
-    def test_generate_seeds_with_real_items(self):
+    def test_generate_idea_dry_run(self):
         with _with_side(MOCK_SIMPLE):
             agent = IdeatorAgent()
-            items = [
-                CollectedItem(
-                    title="A", content="B", url="https://e.com",
-                    source_id="s1", source_name="S1",
-                ),
-                CollectedItem(
-                    title="C", content="D", url="https://e2.com",
-                    source_id="s2", source_name="S2",
-                ),
-            ]
-            seeds = agent.generate_seeds("Tech interests", items)
-            assert len(seeds) == 2
-            assert all(s.created_at is not None for s in seeds)
+            seed = Seed(title="Test", content="Content")
+            result = agent.generate_idea(seed, "Interests", dry_run=True)
+            assert isinstance(result, str)
+            assert result == MOCK_SIMPLE
 
-    def test_generate_seeds_links_to_source(self):
-        with _with_side(MOCK_WITH_SOURCE):
+    def test_generate_idea_includes_content_in_prompt(self):
+        with _with_side(MOCK_SIMPLE) as mock_run:
             agent = IdeatorAgent()
-            items = [
-                CollectedItem(
-                    title="Article A", content="Body A",
-                    url="https://example.com/a",
-                    source_id="src_a", source_name="Source A",
-                ),
-                CollectedItem(
-                    title="Article B", content="Body B",
-                    url="https://example.com/b",
-                    source_id="src_b", source_name="Source B",
-                ),
-            ]
-            seeds = agent.generate_seeds("Interests", items)
-            assert len(seeds) == 2
-            assert seeds[0].source_id == "src_a"
-            assert seeds[0].source_url == "https://example.com/a"
-            assert seeds[1].source_id == "src_b"
-            assert seeds[1].source_url == "https://example.com/b"
+            seed = Seed(
+                title="Article Title",
+                content="Article body",
+                source_url="https://example.com/a",
+            )
+            agent.generate_idea(seed, "AI, ML")
+            prompt = mock_run.call_args[0][0]
+            assert "Article Title" in prompt
+            assert "Article body" in prompt
+            assert "https://example.com/a" in prompt
+            assert "AI, ML" in prompt
 
-    def test_generate_seeds_no_source_when_index_missing(self):
+    def test_generate_idea_no_url(self):
         with _with_side(MOCK_SIMPLE):
             agent = IdeatorAgent()
-            items = [
-                CollectedItem(
-                    title="A", content="B", url="https://e.com",
-                    source_id="s1", source_name="S1",
-                ),
-            ]
-            seeds = agent.generate_seeds("Interests", items)
-            assert len(seeds) == 2
-            assert seeds[0].source_id is None
-            assert seeds[0].source_url is None
+            seed = Seed(title="No URL", content="Content here")
+            result = agent.generate_idea(seed, "Interests")
+            assert isinstance(result, Idea)
+            assert result.source_url is None

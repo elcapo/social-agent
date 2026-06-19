@@ -11,18 +11,18 @@ from pydantic import BaseModel
 from social_agent.agents.writer import WriterAgent
 from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
-from social_agent.models.seed import Seed, SeedStatus
+from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.storage.markdown_store import MarkdownStore
 
 DATA_DIR = Path("data")
 draft_store = MarkdownStore[Draft](DATA_DIR / "drafts", Draft)
-seed_store = MarkdownStore[Seed](DATA_DIR / "seeds", Seed)
+idea_store = MarkdownStore[Idea](DATA_DIR / "ideas", Idea)
 
 router = APIRouter(tags=["drafts"])
 
 
 class GenerateDraftsRequest(BaseModel):
-    seed_id: str
+    idea_id: str
     platforms: list[str]
     dry_run: bool = False
 
@@ -64,12 +64,12 @@ def get_draft(draft_id: str) -> Draft:
 
 @router.post("/drafts/generate", status_code=201)
 def generate_drafts(body: GenerateDraftsRequest) -> GenerateDraftsResponse:
-    seed = seed_store.get(body.seed_id)
-    if not seed:
-        raise HTTPException(404, f"Seed '{body.seed_id}' not found")
+    idea = idea_store.get(body.idea_id)
+    if not idea:
+        raise HTTPException(404, f"Idea '{body.idea_id}' not found")
 
-    if seed.status != SeedStatus.pending:
-        raise HTTPException(400, f"Seed is {seed.status.value}, only pending seeds can be used")
+    if idea.status != IdeaStatus.pending:
+        raise HTTPException(400, f"Idea is {idea.status.value}, only pending ideas can be used")
 
     platforms_dir = settings.prompts_dir / "platforms"
     if not platforms_dir.exists():
@@ -94,7 +94,7 @@ def generate_drafts(body: GenerateDraftsRequest) -> GenerateDraftsResponse:
         max_chars = post.metadata.get("max_chars", 0)
 
         result = writer.generate_draft(
-            seed=seed,
+            idea=idea,
             platform=p,
             platform_instructions=instructions,
             platform_name=platform_name,
@@ -109,8 +109,8 @@ def generate_drafts(body: GenerateDraftsRequest) -> GenerateDraftsResponse:
             drafts.append(result)
 
     if not body.dry_run:
-        seed.status = SeedStatus.used
-        seed_store.save(seed)
+        idea.status = IdeaStatus.used
+        idea_store.save(idea)
 
     if body.dry_run:
         return GenerateDraftsResponse(raw_responses=raw_responses)
