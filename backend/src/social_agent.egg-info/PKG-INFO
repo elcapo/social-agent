@@ -18,8 +18,10 @@ Requires-Dist: tweepy>=4.16
 Requires-Dist: Pillow>=10.0
 Requires-Dist: python-multipart>=0.0.9
 Requires-Dist: markdownify>=1.2.2
+Requires-Dist: httpx2>=2.4.0
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
 Requires-Dist: ruff>=0.3; extra == "dev"
 Provides-Extra: playwright
 Requires-Dist: playwright>=1.40; extra == "playwright"

@@ -28,6 +28,7 @@ backend/src/social_agent/cli/linkedin_auth.py
 backend/src/social_agent/collectors/__init__.py
 backend/src/social_agent/collectors/base.py
 backend/src/social_agent/collectors/link_scraper.py
+backend/src/social_agent/collectors/playwright_utils.py
 backend/src/social_agent/collectors/rss.py
 backend/src/social_agent/collectors/scraper.py
 backend/src/social_agent/collectors/social.py

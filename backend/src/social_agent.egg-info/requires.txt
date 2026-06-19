@@ -13,9 +13,11 @@ tweepy>=4.16
 Pillow>=10.0
 python-multipart>=0.0.9
 markdownify>=1.2.2
+httpx2>=2.4.0
 
 [dev]
 pytest>=8.0
+pytest-asyncio>=0.24
 ruff>=0.3
 
 [playwright]
