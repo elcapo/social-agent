@@ -106,8 +106,8 @@ import Nav from "../components/Nav.astro";
         ${seeds.map(s => {
           const domain = s.source_url ? (() => { try { return new URL(s.source_url).hostname; } catch { return s.source_url; } })() : null;
           return `
-          <li class="list-row items-center gap-3 py-3">
-            <div class="min-w-0 flex-1 max-w-[75%]">
+          <li class="list-row items-center gap-3 py-3" style="--list-grid-cols: 1fr minmax(0,auto)">
+            <div class="min-w-0 max-w-[75%]">
               <div class="font-medium">${esc(s.title)}</div>
               <div class="text-xs text-base-content/40 mb-1">${esc(s.source_name || "")}</div>
               ${s.source_url
@@ -116,7 +116,7 @@ import Nav from "../components/Nav.astro";
                     <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${esc(s.source_url)}" aria-label="Copy URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                   </div>`
                 : ''}
-              <div class="flex flex-wrap gap-1 mt-1">
+              <div class="flex flex-wrap gap-1 mt-1 w-full">
                 ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
               </div>
             </div>

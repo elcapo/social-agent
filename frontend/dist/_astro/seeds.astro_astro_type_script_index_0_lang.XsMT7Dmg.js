@@ -1,14 +1,14 @@
 const u="http://localhost:8000/api",f=document.getElementById("error-msg");function d(s){f.textContent=s,f.classList.remove("hidden")}function m(){f.classList.add("hidden")}async function g(s){try{const t=await s.json();return Array.isArray(t.detail)?t.detail[0]?.msg||"Request failed":t.detail||"Request failed"}catch{return"Request failed"}}async function i(){m();const s=new URLSearchParams;(r.statuses||[]).forEach(a=>s.append("statuses",a)),r.q&&s.set("q",r.q),r.url&&s.set("url",r.url);const t=s.toString(),e=await(await fetch(`${u}/seeds${t?"?"+t:""}`)).json(),p=document.getElementById("seeds-list");if(!e.length){p.innerHTML='<div class="alert bg-base-200 text-sm">No seeds yet. Click "Generate from interests" or "Generate from sources" to create some.</div>';return}p.innerHTML=`<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
         ${e.map(a=>{const b=a.source_url?(()=>{try{return new URL(a.source_url).hostname}catch{return a.source_url}})():null;return`
-          <li class="list-row items-center gap-3 py-3">
-            <div class="min-w-0 flex-1 max-w-[75%]">
+          <li class="list-row items-center gap-3 py-3" style="--list-grid-cols: 1fr minmax(0,auto)">
+            <div class="min-w-0 max-w-[75%]">
               <div class="font-medium">${o(a.title)}</div>
               <div class="text-xs text-base-content/40 mb-1">${o(a.source_name||"")}</div>
               ${a.source_url?`<div class="flex items-center gap-1 text-sm text-base-content/50">
                     <a href="${o(a.source_url)}" target="_blank" rel="noopener noreferrer" class="truncate max-w-[200px] hover:text-primary transition-colors" title="${o(a.source_url)}">${o(b)}</a>
                     <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${o(a.source_url)}" aria-label="Copy URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                   </div>`:""}
-              <div class="flex flex-wrap gap-1 mt-1">
+              <div class="flex flex-wrap gap-1 mt-1 w-full">
                 ${(a.tags||[]).map(c=>`<span class="badge badge-sm badge-soft badge-primary">${o(c)}</span>`).join("")}
               </div>
             </div>
