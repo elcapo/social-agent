@@ -195,46 +195,61 @@ Actualmente toda la persistencia se basa en archivos Markdown con frontmatter YA
 
 Se propone migrar a SQLite como base de datos ligera y embebida, aplicando el **patrón repositorio** para abstraer la capa de persistencia y facilitar futuras migraciones a otros motores (PostgreSQL, MySQL, etc.).
 
+### Decisiones de diseño (confirmadas)
+
+| # | Decisión | Opción elegida | Razón |
+|---|---|---|---|
+| 1 | Primary Key | UUID v4 como `String(36)` con prefijos `draft_`/`idea_`/`seed_`/`src_` | Conserva los IDs existentes en Markdown y la legibilidad; evita colisiones en la migración |
+| 2 | `MarkdownStore` | Se mantiene como backend alternativo seleccionable vía `config.py` (no se deprecata) | Los 225 tests existentes siguen pasando; permite dev/test sin BD |
+| 3 | Async vs sync | **SQLAlchemy 2.0 sync** (diverge del plan original async) | Todo el codebase es síncrono (endpoints `def`, `httpx` sync, `MarkdownStore`, scheduler `run_once`). Async obligaría a refactorizar endpoints, publishers y tests. El patrón repositorio permite async futuro sin tocar lógica de negocio |
+| 4 | Scheduler | Adaptar `run_once`/`run_loop` para recibir `DraftRepository` (Protocol) en vez de `MarkdownStore[Draft]` | Coherencia con el patrón repositorio; los callers construyen el repo vía factory |
+| 5 | Modelo `Idea` | **Añadir tabla `ideas` + `IdeaRepository`** (gap del ROADMAP original) | El ROADMAP omitía `Idea`, pero el flujo `seed → idea → draft` y `router_ideas.py` dependen de él |
+
 ### Plan de implementación
 
 #### 11.1 Elección de tecnología
 
-- **Base de datos:** SQLite (vía `aiosqlite` + `SQLAlchemy` para async)
-- **ORM/SQL:** SQLAlchemy 2.0 con modo `async` y `declarative mapping`
+- **Base de datos:** SQLite (vía `sqlite3` embebido + SQLAlchemy 2.0 **sync**)
+- **ORM/SQL:** SQLAlchemy 2.0 con `declarative mapping` y sesiones síncronas (`sessionmaker`)
 - **Migraciones:** Alembic para control de versiones del esquema
-- **Patrón:** Repository Pattern con interfaces abstractas
+- **Patrón:** Repository Pattern con interfaces basadas en `Protocol` (structural typing)
 
 #### 11.2 Definir el esquema de base de datos
 
-- Tabla `sources` → equivalente a `Source` (id, type, name, url, priority, active, created_at, updated_at)
-- Tabla `seeds` → equivalente a `Seed` (id, source_id FK, content, status, interests, created_at, updated_at)
-- Tabla `drafts` → equivalente a `Draft` (id, seed_id FK, platform, content, status, scheduled_at, media_urls JSON, created_at, updated_at)
-- Tabla `published` → historial de publicaciones (id, draft_id FK, platform, post_url, published_at)
-- Usar `UUID` como Primary Key o `Integer` autoincremental (decidir en implementación)
-- Índices apropiados para búsquedas frecuentes (status, platform, scheduled_at, created_at)
+- Tabla `sources` → equivalente a `Source` (id, name, source_type, url, priority, tags JSON, config JSON, enabled, created_at, last_fetched)
+- Tabla `seeds` → equivalente a `Seed` (id, title, content, source_id FK→sources, source_url, source_name, tags JSON, status, created_at)
+- Tabla `ideas` → equivalente a `Idea` (id, seed_id FK→seeds, title, summary, source_url, status, created_at) — **añadida (gap del ROADMAP original)**
+- Tabla `drafts` → equivalente a `Draft` (id, idea_id FK→ideas, platform, content, status, notes, platform_post_id, publish_error, publish_attempts, media_urls JSON, media_paths JSON, created_at, published_at, scheduled_at)
+- Tabla `published` → historial de publicaciones (id int autoincr, draft_id FK→drafts, platform, post_url, published_at)
+- **Primary Key:** UUID v4 como `String(36)` (conserva los IDs existentes en Markdown y los prefijos `draft_`/`idea_`/`seed_`/`src_` para legibilidad)
+- Índices apropiados para búsquedas frecuentes (status, platform, scheduled_at, created_at, enabled en sources)
+- Engine: `create_engine(f"sqlite:///{db_path}")` con `connect_args={"check_same_thread": False}` para uso desde FastAPI
 
 #### 11.3 Definir interfaces de repositorio
 
 Crear `backend/src/social_agent/storage/repositories/` con:
 
-- `base.py` — `ABC` con métodos CRUD genéricos (`get`, `list`, `create`, `update`, `delete`)
+- `base.py` — `Repository[T]` como `Protocol` con métodos CRUD genéricos (`save`, `get`, `list`, `delete`, `count`) — misma superficie que `MarkdownStore` actual
 - `source_repository.py` — `SourceRepository` con métodos específicos (`list_active`, `find_by_type`)
 - `seed_repository.py` — `SeedRepository` con métodos específicos (`list_by_status`, `list_by_source`)
+- `idea_repository.py` — `IdeaRepository` con métodos específicos (`list_by_status`) — **añadido (gap del ROADMAP original)**
 - `draft_repository.py` — `DraftRepository` con métodos específicos (`list_scheduled`, `list_by_platform`, `list_by_status`)
 
-Cada repositorio define una interfaz abstracta (`Protocol` o `ABC`) que cualquier implementación concreta debe cumplir.
+Se usa `Protocol` (structural typing) en vez de `ABC` para que `MarkdownStore` cumpla la interfaz por duck typing sin herencia explícita.
 
 #### 11.4 Implementar repositorio SQLite con SQLAlchemy
 
-- `sqlalchemy_repository.py` — Implementación concreta de cada repositorio usando SQLAlchemy async sessions
-- Manejo de sesiones con `async_sessionmaker`
-- Mapeo de modelos ORM a modelos Pydantic del dominio
-- Manejo de `media_urls` como JSON en SQLite
+- `sqlalchemy_repository.py` — Implementación concreta de cada repositorio usando SQLAlchemy 2.0 **sync** sessions
+- Manejo de sesiones con `sessionmaker` (sesión por operación o por request)
+- Mapeo de modelos ORM a modelos Pydantic del dominio (métodos `_to_pydantic`/`_to_orm` privados)
+- Manejo de `media_urls`/`media_paths`/`tags`/`config` como columnas `JSON` en SQLite
 
-#### 11.5 Mantener `MarkdownStore` como implementación alternativa (opcional)
+#### 11.5 Mantener `MarkdownStore` como implementación alternativa
 
-- Para desarrollo local y simplicidad, mantener `MarkdownStore` pero adaptarlo a la misma interfaz de repositorio
-- Permitir cambiar entre implementaciones vía configuración (`config.py`)
+- `MarkdownStore` se mantiene como backend alternativo seleccionable vía `config.py` (no se deprecata)
+- Ya cumple los `Protocol` definidos en 11.3 por duck typing (misma API `save`/`get`/`list`/`delete`/`count`/`list_scheduled`); se añaden stubs solo si falta algún método
+- `config.py`: nuevo campo `storage_backend: str = "markdown"` (default seguro para no romper los 225 tests existentes)
+- `storage/factory.py` con `get_*_repository(backend=settings.storage_backend)` para construir el repositorio adecuado
 
 #### 11.6 Configurar Alembic
 
@@ -245,15 +260,16 @@ Cada repositorio define una interfaz abstracta (`Protocol` o `ABC`) que cualquie
 
 #### 11.7 Actualizar dependencias
 
-- Añadir `sqlalchemy>=2.0`, `aiosqlite`, `alembic` a `pyproject.toml`
+- Añadir `sqlalchemy>=2.0`, `alembic>=1.13` a `pyproject.toml` (no `aiosqlite`: se usa SQLAlchemy sync)
 - Opcional: `alembic-utils` para migraciones más complejas
 
 #### 11.8 Migrar la lógica de negocio
 
-- Actualizar `MarkdownStore` o crear nuevo `DatabaseStore` que use los repositorios
+- Crear `DatabaseStore` (o repositorios SQLite) que implementen los `Protocol` de 11.3
 - Los agentes (`ideator.py`, `writer.py`) y publishers deben recibir el repositorio por inyección de dependencias
-- Actualizar routers de FastAPI para usar los nuevos repositorios (vía `Depends`)
-- Actualizar comandos CLI para usar los nuevos repositorios
+- Actualizar routers de FastAPI para usar los nuevos repositorios (vía `Depends` o factory)
+- Actualizar comandos CLI para usar los nuevos repositorios vía factory
+- **Adaptar `scheduler.py`:** cambiar el type hint de `run_once`/`run_loop` de `MarkdownStore[Draft]` a `DraftRepository` (Protocol) — los callers (CLI `schedule publish/worker` y `router_scheduler.py`) construyen el repositorio vía factory
 
 #### 11.9 Estrategia de migración de datos
 
@@ -267,6 +283,20 @@ Cada repositorio define una interfaz abstracta (`Protocol` o `ABC`) que cualquie
 - Tests de integración con la base de datos real
 - Tests de la migración de datos
 - Verificar que todos los tests existentes siguen pasando (los de `MarkdownStore` deben coexistir)
+
+### Fase 11 — Migración a base de datos (SQLite + patrón repositorio)
+
+- [x] 11.1 — Dependencias: `sqlalchemy>=2.0`, `alembic>=1.13` añadidas; `settings.storage_backend` + `settings.sqlite_path` en `config.py`
+- [x] 11.2 — `storage/db.py` con modelos ORM SQLAlchemy 2.0 sync: `sources`, `seeds`, `ideas` (gap del ROADMAP), `drafts`, `published` + FKs en cascada + índices (status, platform, scheduled_at, enabled)
+- [x] 11.3 — `storage/repositories/` con `Protocol` interfaces: `Repository[T]` base + `SourceRepository`, `SeedRepository`, `IdeaRepository`, `DraftRepository` (structural typing, `MarkdownStore` cumple por duck typing)
+- [x] 11.4 — `storage/sqlalchemy_repositories.py` con `SqlAlchemy{Source,Seed,Idea,Draft}Repository` (sesiones sync, mapeo ORM↔Pydantic, `_ensure_utc` para normalizar tzinfo, JSON columns para listas/dicts)
+- [x] 11.4 — `storage/factory.py` con `get_*_repository(backend)` que selecciona `markdown` (default) o `sqlite` y crea tablas on first use
+- [x] 11.5 — `storage/markdown_repositories.py` con wrappers `Markdown{Source,Seed,Idea,Draft}Repository` que heredan de `MarkdownStore` y añaden los métodos específicos; `MarkdownStore` sin cambios
+- [x] 11.6 — Alembic configurado en `backend/alembic/`: `env.py` con `Base.metadata` + URL resuelta desde `settings`; migración inicial autogenerada (`1144f4016923_initial_schema.py`); `render_as_batch=True` para ALTER TABLE en SQLite; verificado upgrade/downgrade + no-drift
+- [x] 11.7 — Dependencias (cubiertas en 11.1)
+- [x] 11.8 — Routers FastAPI, CLI y `scheduler.py` migrados a usar `factory.get_*_repository()`: `run_once`/`run_loop` ahora reciben `DraftRepository` (Protocol); tests existentes siguen pasando sin cambios (backend markdown por defecto)
+- [x] 11.9 — `storage/migrate_to_sqlite.py` con `migrate(data_dir, sqlite_path)` que lee Markdown y upserta en SQLite preservando IDs y FKs; comando CLI `social-agent db migrate` con flags `--data-dir` y `--sqlite-path`; idempotente
+- [x] 11.10 — Tests: 308 tests totales, todos pasan (50 repos SQLite + 4 Alembic + 8 migración + 17 integración SQLite via API + 229 existentes); coexistencia Markdown/SQLite validada
 
 ---
 

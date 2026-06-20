@@ -6,10 +6,10 @@ from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
 from social_agent.publishers.linkedin import LinkedInPublisher
 from social_agent.publishers.twitter import TwitterPublisher
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.storage import get_draft_repository
 
 DATA_DIR = settings.data_dir.resolve()
-draft_store = MarkdownStore[Draft](DATA_DIR / "drafts", Draft)
+draft_store = get_draft_repository()
 
 router = APIRouter(tags=["publish"])
 

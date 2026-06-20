@@ -8,12 +8,12 @@ from pydantic import BaseModel
 from social_agent.agents.ideator import IdeatorAgent
 from social_agent.config import settings
 from social_agent.models.idea import Idea, IdeaStatus
-from social_agent.models.seed import Seed, SeedStatus
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.models.seed import SeedStatus
+from social_agent.storage import get_idea_repository, get_seed_repository
 
 DATA_DIR = settings.data_dir.resolve()
-idea_store = MarkdownStore[Idea](DATA_DIR / "ideas", Idea)
-seed_store = MarkdownStore[Seed](DATA_DIR / "seeds", Seed)
+idea_store = get_idea_repository()
+seed_store = get_seed_repository()
 
 router = APIRouter(tags=["ideas"])
 

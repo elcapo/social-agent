@@ -25,6 +25,8 @@ class Settings(BaseSettings):
 
     data_dir: Path = Path("data")
     prompts_dir: Path = Path("data/prompts")
+    storage_backend: str = "markdown"
+    sqlite_path: Optional[Path] = None
 
 
 settings = Settings()

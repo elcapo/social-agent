@@ -13,12 +13,12 @@ from social_agent.collectors.social import LinkedInCollector, TwitterCollector
 from social_agent.config import settings
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.models.source import Source, SourceType
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.storage import get_seed_repository, get_source_repository
 from social_agent.utils import html_to_markdown
 
 DATA_DIR = settings.data_dir.resolve()
-seed_store = MarkdownStore[Seed](DATA_DIR / "seeds", Seed)
-source_store = MarkdownStore[Source](DATA_DIR / "sources", Source)
+seed_store = get_seed_repository()
+source_store = get_source_repository()
 
 router = APIRouter(tags=["seeds"])
 

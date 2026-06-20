@@ -5,6 +5,7 @@ backend/src/social_agent/config.py
 backend/src/social_agent/llm.py
 backend/src/social_agent/main.py
 backend/src/social_agent/media.py
+backend/src/social_agent/scheduler.py
 backend/src/social_agent/utils.py
 backend/src/social_agent.egg-info/PKG-INFO
 backend/src/social_agent.egg-info/SOURCES.txt
@@ -20,6 +21,7 @@ backend/src/social_agent/api/__init__.py
 backend/src/social_agent/api/router_drafts.py
 backend/src/social_agent/api/router_ideas.py
 backend/src/social_agent/api/router_publish.py
+backend/src/social_agent/api/router_scheduler.py
 backend/src/social_agent/api/router_seeds.py
 backend/src/social_agent/api/router_sources.py
 backend/src/social_agent/cli/__init__.py
@@ -44,10 +46,12 @@ backend/src/social_agent/publishers/twitter.py
 backend/src/social_agent/storage/__init__.py
 backend/src/social_agent/storage/markdown_store.py
 tests/test_api.py
+tests/test_cli.py
 tests/test_collectors.py
 tests/test_ideator.py
 tests/test_linkedin_auth.py
 tests/test_markdown_store.py
 tests/test_models.py
 tests/test_publishers.py
+tests/test_scheduler.py
 tests/test_writer.py

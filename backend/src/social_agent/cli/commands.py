@@ -15,7 +15,12 @@ from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.models.seed import Seed, SeedStatus
 from social_agent.models.source import Source, SourceType
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.storage import (
+    get_draft_repository,
+    get_idea_repository,
+    get_seed_repository,
+    get_source_repository,
+)
 from social_agent.utils import html_to_markdown
 
 DATA_DIR = settings.data_dir.resolve()
@@ -24,10 +29,10 @@ IDEAS_DIR = DATA_DIR / "ideas"
 DRAFTS_DIR = DATA_DIR / "drafts"
 SOURCES_DIR = DATA_DIR / "sources"
 
-seed_store = MarkdownStore[Seed](SEEDS_DIR, Seed)
-idea_store = MarkdownStore[Idea](IDEAS_DIR, Idea)
-draft_store = MarkdownStore[Draft](DRAFTS_DIR, Draft)
-source_store = MarkdownStore[Source](SOURCES_DIR, Source)
+seed_store = get_seed_repository()
+idea_store = get_idea_repository()
+draft_store = get_draft_repository()
+source_store = get_source_repository()
 
 
 @click.group()
@@ -703,6 +708,38 @@ def schedule_worker(interval: int) -> None:
         asyncio.run(run_loop(draft_store, interval_seconds=interval))
     except KeyboardInterrupt:
         click.echo("\nScheduler worker stopped.")
+
+
+# ── Database ──
+
+
+@cli.group()
+def db() -> None:
+    """Database management (SQLite migration, etc.)."""
+
+
+@db.command("migrate")
+@click.option(
+    "--data-dir",
+    default=None,
+    type=click.Path(exists=True, file_okay=False),
+    help="Source data directory (defaults to settings.data_dir).",
+)
+@click.option(
+    "--sqlite-path",
+    default=None,
+    type=click.Path(dir_okay=False),
+    help="Target SQLite file (defaults to settings.sqlite_path or <data_dir>/social_agent.db).",
+)
+def db_migrate(data_dir: str | None, sqlite_path: str | None) -> None:
+    """Migrate existing Markdown data into the SQLite database."""
+    from social_agent.storage.migrate_to_sqlite import migrate
+
+    d = Path(data_dir) if data_dir else None
+    s = Path(sqlite_path) if sqlite_path else None
+    click.echo("Migrating Markdown data to SQLite...")
+    report = migrate(data_dir=d, sqlite_path=s)
+    click.echo(str(report))
 
 
 if __name__ == "__main__":

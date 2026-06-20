@@ -7,10 +7,10 @@ from fastapi import APIRouter, HTTPException, Query
 
 from social_agent.config import settings
 from social_agent.models.source import Source, SourcePriority, SourceType
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.storage import get_source_repository
 
 DATA_DIR = settings.data_dir.resolve()
-source_store = MarkdownStore[Source](DATA_DIR / "sources", Source)
+source_store = get_source_repository()
 
 router = APIRouter(tags=["sources"])
 

@@ -12,14 +12,14 @@ from pydantic import BaseModel
 from social_agent.agents.writer import WriterAgent
 from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
-from social_agent.models.idea import Idea, IdeaStatus
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.models.idea import IdeaStatus
+from social_agent.storage import get_draft_repository, get_idea_repository
 
 logger = logging.getLogger(__name__)
 
 DATA_DIR = settings.data_dir.resolve()
-draft_store = MarkdownStore[Draft](DATA_DIR / "drafts", Draft)
-idea_store = MarkdownStore[Idea](DATA_DIR / "ideas", Idea)
+draft_store = get_draft_repository()
+idea_store = get_idea_repository()
 
 router = APIRouter(tags=["drafts"])
 

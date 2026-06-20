@@ -11,7 +11,7 @@ from social_agent.models.draft import Draft, DraftStatus
 from social_agent.publishers.base import BasePublisher, PublishResult
 from social_agent.publishers.linkedin import LinkedInPublisher
 from social_agent.publishers.twitter import TwitterPublisher
-from social_agent.storage.markdown_store import MarkdownStore
+from social_agent.storage.repositories import DraftRepository
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ class ScheduledItemResult:
 
 
 def run_once(
-    draft_store: MarkdownStore[Draft],
+    draft_store: DraftRepository,
     since: Optional[datetime] = None,
 ) -> list[ScheduledItemResult]:
     """Publish every scheduled draft that is due.
@@ -116,7 +116,7 @@ def run_once(
 
 
 async def run_loop(
-    draft_store: MarkdownStore[Draft],
+    draft_store: DraftRepository,
     interval_seconds: int = 300,
     max_iterations: Optional[int] = None,
 ) -> None:
