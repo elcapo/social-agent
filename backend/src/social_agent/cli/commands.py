@@ -636,7 +636,7 @@ def schedule_set(draft_id: str, scheduled_at: str) -> None:
 
     when = _parse_scheduled_at(scheduled_at)
     draft.scheduled_at = when
-    draft.status = DraftStatus.draft
+    draft.status = DraftStatus.approved
     draft_store.save(draft)
     click.echo(f"Draft '{draft_id}' scheduled for {when.isoformat()}.")
 

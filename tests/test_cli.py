@@ -43,7 +43,7 @@ class TestScheduleSet:
         assert "scheduled for" in result.output
         restored = cli_draft_store.get(draft.id)
         assert restored.scheduled_at is not None
-        assert restored.status == DraftStatus.draft
+        assert restored.status == DraftStatus.approved
 
     def test_set_schedule_not_found(self, runner, cli_draft_store):
         result = runner.invoke(
@@ -69,6 +69,18 @@ class TestScheduleSet:
         )
         assert result.exit_code == 0
         assert "already published" in result.output
+
+    def test_set_schedule_promotes_rejected_to_approved(self, runner, cli_draft_store):
+        draft = _make_draft(cli_draft_store, status=DraftStatus.rejected)
+        result = runner.invoke(
+            cli,
+            ["schedule", "set", draft.id, "2026-06-20T15:30:00"],
+        )
+        assert result.exit_code == 0
+        assert "scheduled for" in result.output
+        restored = cli_draft_store.get(draft.id)
+        assert restored.scheduled_at is not None
+        assert restored.status == DraftStatus.approved
 
 
 class TestScheduleList:

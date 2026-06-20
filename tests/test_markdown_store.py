@@ -236,3 +236,38 @@ class TestMarkdownStoreListScheduled:
         result = tmp_draft_store.list_scheduled()
         assert len(result) == 1
         assert result[0].scheduled_at == due.scheduled_at
+
+    def test_list_scheduled_accepts_multiple_statuses(self, tmp_draft_store):
+        due_draft = Draft(
+            idea_id="i1", platform="twitter", content="d",
+            status=DraftStatus.draft,
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        due_approved = Draft(
+            idea_id="i2", platform="twitter", content="a",
+            status=DraftStatus.approved,
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        due_published = Draft(
+            idea_id="i3", platform="twitter", content="p",
+            status=DraftStatus.published,
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        due_failed = Draft(
+            idea_id="i4", platform="twitter", content="f",
+            status=DraftStatus.failed,
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        due_rejected = Draft(
+            idea_id="i5", platform="twitter", content="r",
+            status=DraftStatus.rejected,
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        )
+        for d in (due_draft, due_approved, due_published, due_failed, due_rejected):
+            tmp_draft_store.save(d)
+
+        result = tmp_draft_store.list_scheduled(
+            status_values=(DraftStatus.draft.value, DraftStatus.approved.value),
+        )
+        ids = {d.id for d in result}
+        assert ids == {due_draft.id, due_approved.id}

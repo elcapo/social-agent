@@ -141,6 +141,44 @@ class TestRunOnce:
         assert run_once(draft_store) == []
         assert draft_store.get(future.id).status == DraftStatus.draft
 
+    def test_publishes_due_approved_draft(self, draft_store):
+        from social_agent.publishers.base import PublishResult
+        from social_agent.scheduler import run_once
+
+        draft = _due_draft(draft_store, status=DraftStatus.approved)
+        patches = [
+            patch.object(global_settings, "twitter_api_key", "ck"),
+            patch.object(global_settings, "twitter_api_secret", "cs"),
+            patch.object(global_settings, "twitter_access_token", "at"),
+            patch.object(global_settings, "twitter_access_token_secret", "ats"),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            with patch(
+                "social_agent.scheduler.TwitterPublisher.publish",
+                return_value=PublishResult(success=True, platform_post_id="r1"),
+            ):
+                results = run_once(draft_store)
+        finally:
+            for p in patches:
+                p.stop()
+
+        assert len(results) == 1
+        assert results[0].success is True
+        restored = draft_store.get(draft.id)
+        assert restored.status == DraftStatus.published
+        assert restored.scheduled_at is None
+
+    def test_skips_disallowed_statuses(self, draft_store):
+        from social_agent.scheduler import run_once
+
+        for status in (DraftStatus.published, DraftStatus.failed, DraftStatus.rejected):
+            draft = _due_draft(draft_store, status=status)
+            assert draft.status == status
+
+        assert run_once(draft_store) == []
+
     def test_publisher_exception_caught(self, draft_store):
         from social_agent.scheduler import run_once
 

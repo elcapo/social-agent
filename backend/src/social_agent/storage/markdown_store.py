@@ -102,16 +102,17 @@ class MarkdownStore(Generic[T]):
     def list_scheduled(
         self,
         since: Optional[datetime] = None,
-        status_value: str = "draft",
+        status_values: tuple[str, ...] = ("draft",),
     ) -> list[T]:
         """Return items with a populated ``scheduled_at`` that is due.
 
         An item is due when ``scheduled_at`` is not None and ``scheduled_at <= since``
-        (``since`` defaults to now in UTC). Items whose ``status`` value does not
-        match ``status_value`` (default ``"draft"``) are excluded so already
-        published/failed drafts are not re-published.
+        (``since`` defaults to now in UTC). Items whose ``status`` value is not in
+        ``status_values`` (default ``("draft",)``) are excluded so already
+        published/failed/rejected drafts are not re-published.
         """
         cutoff = since if since is not None else datetime.now(timezone.utc)
+        allowed = set(status_values)
 
         def _due(item: T) -> bool:
             scheduled = getattr(item, "scheduled_at", None)
@@ -119,7 +120,7 @@ class MarkdownStore(Generic[T]):
                 return False
             status = getattr(item, "status", None)
             status_val = status.value if hasattr(status, "value") else status
-            if status_val != status_value:
+            if status_val not in allowed:
                 return False
             if scheduled.tzinfo is None:
                 scheduled = scheduled.replace(tzinfo=timezone.utc)
