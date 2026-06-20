@@ -137,7 +137,7 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      container.innerHTML = `<div class="flex flex-col gap-3">${sources
+      container.innerHTML = `<div class="grid grid-cols-1 xl:grid-cols-2 gap-3">${sources
         .map((s) => {
           const typeIconName = TYPE_ICONS[s.source_type] ?? null;
           const prio = PRIORITY_LABELS[String(s.priority)] || String(s.priority);

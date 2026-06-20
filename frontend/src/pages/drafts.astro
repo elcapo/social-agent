@@ -225,7 +225,7 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      container.innerHTML = `<div class="flex flex-col gap-3">${drafts
+      container.innerHTML = `<div class="grid grid-cols-1 xl:grid-cols-2 gap-3">${drafts
         .map((d) => {
           const head = `${statusBadgeSoft(
             statusLabel(d.status),

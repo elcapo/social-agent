@@ -177,7 +177,7 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      container.innerHTML = `<div class="flex flex-col gap-3">${seeds
+      container.innerHTML = `<div class="grid grid-cols-1 xl:grid-cols-2 gap-3">${seeds
         .map((s) => {
           const sourceName = s.source_name || "";
           const sourceBadge = sourceName
