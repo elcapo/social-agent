@@ -94,6 +94,7 @@ class IdeatorAgent(BaseAgent):
             title=data.get("title", "Untitled"),
             summary=data.get("summary", ""),
             source_url=seed.source_url,
+            source_name=seed.source_name,
             status=IdeaStatus.pending,
             created_at=datetime.now(timezone.utc),
         )

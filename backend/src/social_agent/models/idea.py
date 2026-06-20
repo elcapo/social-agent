@@ -24,6 +24,7 @@ class Idea(BaseModel):
     summary: str
     comment: Optional[str] = None
     source_url: Optional[str] = None
+    source_name: str = ""
     status: IdeaStatus = IdeaStatus.pending
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -35,6 +36,7 @@ class Idea(BaseModel):
             "summary": self.summary,
             "comment": self.comment,
             "source_url": self.source_url,
+            "source_name": self.source_name,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),
         }

@@ -151,10 +151,10 @@ import Icon from "../components/Icon.astro";
 
       const recentSeeds = seeds.slice(-5).reverse();
       byId("recent-seeds").innerHTML = recentSeeds.length
-        ? `<div class="divide-y divide-base-200">${recentSeeds
+        ? `<div class="flex flex-col gap-3">${recentSeeds
             .map(
               (s) => `
-            <a href="/seeds" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150" title="${esc(s.title)}">
+            <a href="/seeds/edit?id=${s.id}" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150" title="Abrir semilla: ${esc(s.title)}">
               <div class="min-w-0">
                 <div class="font-semibold text-sm truncate">${esc(s.title)}</div>
                 <div class="text-xs text-base-content/60">${s.created_at ? new Date(s.created_at).toLocaleDateString() : ""}</div>
@@ -167,13 +167,13 @@ import Icon from "../components/Icon.astro";
 
       const recentDrafts = drafts.slice(-5).reverse();
       byId("recent-drafts").innerHTML = recentDrafts.length
-        ? `<div class="divide-y divide-base-200">${recentDrafts
+        ? `<div class="flex flex-col gap-3">${recentDrafts
             .map((d) => {
               const preview = d.content
                 ? d.content.substring(0, 80) + (d.content.length > 80 ? "…" : "")
                 : "(vacío)";
               return `
-            <a href="/drafts" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150" title="${esc(preview)}">
+            <a href="/drafts/edit?id=${d.id}" class="flex items-center justify-between gap-3 py-3 px-1 no-underline hover:bg-base-200 -mx-1 px-3 rounded-lg transition-colors duration-150" title="Abrir borrador: ${esc(preview)}">
               <div class="min-w-0">
                 <div class="font-semibold text-sm truncate">${esc(preview)}</div>
                 <div class="text-xs text-base-content/60">${d.created_at ? new Date(d.created_at).toLocaleDateString() : ""}</div>

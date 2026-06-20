@@ -28,6 +28,7 @@ export interface Idea {
   comment?: string;
   seed_id?: string;
   source_url?: string;
+  source_name?: string;
   status: string;
   created_at?: string;
 }

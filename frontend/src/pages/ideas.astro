@@ -66,6 +66,18 @@ import Icon from "../components/Icon.astro";
   <script>
     import { icon } from "~/scripts/icons";
     import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import {
+      entityCard,
+      cardTitle,
+      contextBadge,
+      statusBadgeSoft,
+      actionBtn,
+      actionEdit,
+      metaChip,
+      urlRow,
+      actionsWrap,
+      metaWrap,
+    } from "~/scripts/card";
     import type { Idea, Seed } from "~/scripts/types";
 
     const API = "http://localhost:8000/api";
@@ -74,9 +86,9 @@ import Icon from "../components/Icon.astro";
 
     const ALL_STATUSES = ["pending", "used", "discarded"];
     const STATUS_LABELS: Record<string, string> = {
-      pending: "warning",
-      used: "success",
-      discarded: "error",
+      pending: "badge-warning",
+      used: "badge-success",
+      discarded: "badge-error",
     };
     const STATUS_ES: Record<string, string> = {
       pending: "pendiente",
@@ -137,46 +149,34 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
-        ${ideas
-          .map((idea) => {
-            const commentIcon = idea.comment
-              ? `<span class="text-info shrink-0" title="Tiene comentario para el escritor">${icon("message-circle", 15)}</span>`
+      container.innerHTML = `<div class="flex flex-col gap-3">${ideas
+        .map((idea) => {
+          const commentBadge = idea.comment
+            ? contextBadge("message-circle", "", "Tiene comentario para el escritor")
+            : "";
+          const discardBtn =
+            idea.status === "pending"
+              ? actionBtn("discard", idea.id, "close", "Descartar idea", "text-error")
               : "";
-            return `
-        <li class="list-row items-center gap-3 py-3">
-          <div class="min-w-0 flex-1 max-w-[75%]">
-            <div class="font-medium flex items-center gap-1.5" title="${esc(idea.title)}">
-              ${commentIcon}
-              <span class="truncate">${esc(idea.title)}</span>
-            </div>
-            <div class="text-sm text-base-content/60 mt-1 line-clamp-2">${esc(idea.summary || "")}</div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs text-base-content/60">semilla: ${esc(idea.seed_id || "")}</span>
-              ${
-                idea.source_url
-                  ? `<a href="${esc(idea.source_url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline truncate max-w-[200px]" title="${esc(idea.source_url)}">${esc(idea.source_url)}</a>`
-                  : ""
-              }
-            </div>
-          </div>
-          <div class="flex items-center gap-2 shrink-0 ml-auto">
-            <span class="badge badge-md badge-soft whitespace-nowrap ${idea.status === "pending" ? "badge-warning" : idea.status === "used" ? "badge-success" : "badge-error"}" title="Estado ${statusLabel(idea.status)}">${statusLabel(idea.status)}</span>
-            <span class="text-sm text-base-content/60 whitespace-nowrap">${idea.created_at ? new Date(idea.created_at).toLocaleDateString() : "—"}</span>
-            <div class="flex gap-1">${
-              idea.status === "pending"
-                ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${idea.id}" aria-label="Descartar idea" title="Descartar idea">${icon("close", 16)}</button>`
-                : ""
-            }<a href="/ideas/edit?id=${idea.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar idea" title="Editar idea">${icon("edit", 16)}</a>${
-              idea.status !== "used"
-                ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${idea.id}" aria-label="Eliminar idea" title="Eliminar idea">${icon("trash", 16)}</button>`
-                : ""
-            }</div>
-          </div>
-        </li>`;
-          })
-          .join("")}
-      </ul>`;
+          const deleteBtn =
+            idea.status !== "used"
+              ? actionBtn("delete", idea.id, "trash", "Eliminar idea", "text-error")
+              : "";
+          const sourceBadge = idea.source_name
+            ? contextBadge(null, idea.source_name, "Fuente")
+            : "";
+          const head = `${commentBadge}${cardTitle(idea.title)}${statusBadgeSoft(
+            statusLabel(idea.status),
+            STATUS_LABELS[idea.status] || "badge-ghost"
+          )}`;
+          const body = `<div class="line-clamp-2">${esc(idea.summary || "")}</div>
+            <div class="flex items-center gap-2 flex-wrap">${sourceBadge}<div class="flex-1 min-w-0">${idea.source_url ? urlRow(idea.source_url) : '<span class="text-xs text-base-content/60">Sin URL de origen</span>'}</div></div>`;
+          const foot = `${metaWrap(
+            metaChip("clock", idea.created_at ? new Date(idea.created_at).toLocaleDateString() : "—")
+          )}${actionsWrap(discardBtn + actionEdit(`/ideas/edit?id=${idea.id}`, "Editar idea") + deleteBtn)}`;
+          return entityCard({ head, body, foot });
+        })
+        .join("")}</div>`;
     }
 
     byId("ideas-list").addEventListener("click", async (e: MouseEvent) => {
@@ -202,6 +202,21 @@ import Icon from "../components/Icon.astro";
             const res = await fetch(`${API}/ideas/${id}`, { method: "DELETE" });
             if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
+          }
+          case "copy-url": {
+            try {
+              await navigator.clipboard.writeText(btn.dataset.url ?? "");
+              const original = btn.innerHTML;
+              btn.innerHTML = icon("check", 14);
+              btn.classList.add("text-success");
+              setTimeout(() => {
+                btn.innerHTML = original;
+                btn.classList.remove("text-success");
+              }, 1500);
+            } catch {
+              showError("No se pudo copiar la URL");
+            }
+            return;
           }
         }
         load();

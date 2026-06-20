@@ -75,7 +75,20 @@ import Icon from "../components/Icon.astro";
 
   <script>
     import { icon } from "~/scripts/icons";
-    import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import { byId, qAll, escAttr, getErrorMessage } from "~/scripts/dom";
+    import {
+      entityCard,
+      cardTitle,
+      contextBadge,
+      statusBadgeSoft,
+      actionBtn,
+      actionEdit,
+      metaChip,
+      tagChips,
+      urlRow,
+      actionsWrap,
+      metaWrap,
+    } from "~/scripts/card";
     import type { Source } from "~/scripts/types";
 
     const API = "http://localhost:8000/api";
@@ -105,14 +118,6 @@ import Icon from "../components/Icon.astro";
       errorEl.classList.add("hidden");
     }
 
-    function getDomain(url: string) {
-      try {
-        return new URL(url).hostname;
-      } catch {
-        return url;
-      }
-    }
-
     async function load() {
       hideError();
       const params = new URLSearchParams();
@@ -121,7 +126,9 @@ import Icon from "../components/Icon.astro";
       if (filters.enabled !== null) params.set("enabled", String(filters.enabled));
       const qs = params.toString();
       const res = await fetch(`${API}/sources${qs ? "?" + qs : ""}`);
-      const sources = (await res.json()) as Source[];
+      const sources = ((await res.json()) as Source[]).sort(
+        (a, b) => (a.priority ?? 2) - (b.priority ?? 2)
+      );
       const container = byId("sources-list");
 
       if (!sources.length) {
@@ -130,41 +137,26 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
-        ${sources
-          .map((s) => {
-            const typeIcon = TYPE_ICONS[s.source_type] ? icon(TYPE_ICONS[s.source_type], 12) : "";
-            const prio = PRIORITY_LABELS[String(s.priority)] || String(s.priority);
-            return `
-          <li class="list-row flex-col items-stretch gap-2 py-3">
-            <div class="flex items-center gap-3">
-              <div class="flex items-center gap-2 min-w-0 flex-1">
-                <span class="font-medium truncate" title="${esc(s.name)}">${esc(s.name)}</span>
-                <span class="badge badge-sm badge-soft shrink-0 gap-1" title="Tipo de fuente">${typeIcon}${esc(s.source_type)}</span>
-                ${s.enabled === false ? '<span class="badge badge-sm badge-soft badge-error shrink-0">desactivada</span>' : ""}
-              </div>
-              <span class="badge badge-sm badge-ghost shrink-0" title="Prioridad ${prio}">${s.priority}</span>
-              <div class="flex gap-1 shrink-0">
-                <a href="/sources/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar fuente" title="Editar fuente">${icon("edit", 16)}</a>
-                <button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${s.id}" aria-label="Eliminar fuente" title="Eliminar fuente">${icon("trash", 16)}</button>
-              </div>
-            </div>
-            <div class="flex items-center gap-3 text-sm text-base-content/60">
-              <div class="flex items-center gap-1 min-w-0 flex-1">
-                <a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="truncate hover:text-primary transition-colors" title="${esc(s.url)}">${esc(getDomain(s.url))}</a>
-                <button class="btn btn-square btn-ghost btn-xs shrink-0" data-action="copy" data-url="${esc(s.url)}" aria-label="Copiar URL" title="Copiar URL">${icon("copy", 14)}</button>
-              </div>
-              <div class="flex flex-wrap gap-1">
-                ${(s.tags || [])
-                  .map((t) => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`)
-                  .join("")}
-              </div>
-            </div>
-            <div class="text-xs text-base-content/60">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</div>
-          </li>`;
-          })
-          .join("")}
-      </ul>`;
+      container.innerHTML = `<div class="flex flex-col gap-3">${sources
+        .map((s) => {
+          const typeIconName = TYPE_ICONS[s.source_type] ?? null;
+          const prio = PRIORITY_LABELS[String(s.priority)] || String(s.priority);
+          const disabledBadge =
+            s.enabled === false
+              ? `<span class="badge badge-sm badge-soft badge-error shrink-0">desactivada</span>`
+              : "";
+          const head = `${cardTitle(s.name)}${disabledBadge}${statusBadgeSoft(s.enabled === false ? "desactivada" : "activa", s.enabled === false ? "badge-error" : "badge-success")}`;
+          const body = `<div class="flex items-center gap-2 flex-wrap">${contextBadge(typeIconName, s.source_type, "Tipo de fuente")}<div class="flex-1 min-w-0">${urlRow(s.url)}</div>${tagChips(s.tags)}</div>`;
+          const foot = `${metaWrap(
+            metaChip("info", `Prioridad ${prio}`, `Prioridad ${prio} (${s.priority})`) +
+              metaChip("clock", s.created_at ? new Date(s.created_at).toLocaleDateString() : "—")
+          )}${actionsWrap(
+            actionEdit(`/sources/edit?id=${s.id}`, "Editar fuente") +
+              actionBtn("delete", s.id, "trash", "Eliminar fuente", "text-error")
+          )}`;
+          return entityCard({ head, body, foot });
+        })
+        .join("")}</div>`;
     }
 
     function openAddForm() {
@@ -205,7 +197,7 @@ import Icon from "../components/Icon.astro";
           return;
         }
         load();
-      } else if (btn.dataset.action === "copy") {
+      } else if (btn.dataset.action === "copy-url") {
         try {
           await navigator.clipboard.writeText(btn.dataset.url ?? "");
           const original = btn.innerHTML;

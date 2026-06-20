@@ -114,6 +114,20 @@ import Icon from "../components/Icon.astro";
   <script>
     import { icon } from "~/scripts/icons";
     import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import {
+      entityCard,
+      cardTitle,
+      contextBadge,
+      statusBadgeSoft,
+      actionBtn,
+      actionEdit,
+      actionDisabled,
+      metaChip,
+      tagChips,
+      urlRow,
+      actionsWrap,
+      metaWrap,
+    } from "~/scripts/card";
     import type { ScrapeResult, Seed, Source } from "~/scripts/types";
 
     const API = "http://localhost:8000/api";
@@ -125,6 +139,12 @@ import Icon from "../components/Icon.astro";
       approved: "aprobado",
       used: "usado",
       discarded: "descartado",
+    };
+    const STATUS_COLORS: Record<string, string> = {
+      pending: "badge-warning",
+      approved: "badge-info",
+      used: "badge-success",
+      discarded: "badge-error",
     };
 
     function statusLabel(s: string) {
@@ -157,53 +177,29 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
-        ${seeds
-          .map((s) => {
-            const domain = s.source_url
-              ? (() => {
-                  try {
-                    return new URL(s.source_url).hostname;
-                  } catch {
-                    return s.source_url || "";
-                  }
-                })()
-              : null;
-            const canAct = s.status === "pending";
-            const approveBtn = canAct
-              ? `<button class="btn btn-square btn-ghost btn-sm text-info" data-action="approve" data-id="${s.id}" aria-label="Aprobar semilla" title="Aprobar semilla">${icon("check", 16)}</button><button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${s.id}" aria-label="Descartar semilla" title="Descartar semilla">${icon("close", 16)}</button>`
-              : `<button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Aprobar semilla (no disponible)" title="No disponible en estado ${statusLabel(s.status)}">${icon("check", 16)}</button><button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Descartar semilla (no disponible)" title="No disponible en estado ${statusLabel(s.status)}">${icon("close", 16)}</button>`;
-            return `
-          <li class="list-row items-center gap-3 py-3" style="--list-grid-cols: 1fr minmax(0,auto)">
-            <div class="min-w-0 max-w-[75%]">
-              <div class="font-medium truncate" title="${esc(s.title)}">${esc(s.title)}</div>
-              <div class="text-xs text-base-content/60 mb-1">${esc(s.source_name || "")}</div>
-              ${
-                s.source_url
-                  ? `<div class="flex items-center gap-1 text-sm text-base-content/60">
-                    <a href="${esc(s.source_url)}" target="_blank" rel="noopener noreferrer" class="truncate max-w-[200px] hover:text-primary transition-colors" title="${esc(s.source_url)}">${esc(domain)}</a>
-                    <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${esc(s.source_url)}" aria-label="Copiar URL" title="Copiar URL">${icon("copy", 14)}</button>
-                  </div>`
-                  : ""
-              }
-              <div class="flex flex-wrap gap-1 mt-1 w-full">
-                ${(s.tags || [])
-                  .map((t) => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`)
-                  .join("")}
-              </div>
-            </div>
-            <div class="flex items-center gap-2 shrink-0 ml-auto">
-              <span class="badge badge-md badge-soft whitespace-nowrap ${s.status === "pending" ? "badge-warning" : s.status === "approved" ? "badge-info" : s.status === "used" ? "badge-success" : "badge-error"}" title="Estado ${statusLabel(s.status)}">${statusLabel(s.status)}</span>
-              <span class="text-sm text-base-content/60 whitespace-nowrap">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</span>
-              <div class="flex gap-1">
-                <a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar semilla" title="Editar semilla">${icon("edit", 16)}</a>
-                ${approveBtn}
-              </div>
-            </div>
-          </li>`;
-          })
-          .join("")}
-      </ul>`;
+      container.innerHTML = `<div class="flex flex-col gap-3">${seeds
+        .map((s) => {
+          const sourceName = s.source_name || "";
+          const sourceBadge = sourceName
+            ? contextBadge(null, sourceName, "Fuente")
+            : "";
+          const canAct = s.status === "pending";
+          const actBtns = canAct
+            ? actionBtn("approve", s.id, "check", "Aprobar semilla", "text-info") +
+              actionBtn("discard", s.id, "close", "Descartar semilla", "text-error")
+            : actionDisabled("check", "Aprobar semilla", `No disponible en estado ${statusLabel(s.status)}`) +
+              actionDisabled("close", "Descartar semilla", `No disponible en estado ${statusLabel(s.status)}`);
+          const head = `${cardTitle(s.title)}${statusBadgeSoft(
+            statusLabel(s.status),
+            STATUS_COLORS[s.status] || "badge-ghost"
+          )}`;
+          const body = `${s.content ? `<div class="line-clamp-2">${esc(s.content)}</div>` : ""}<div class="flex items-center gap-2 flex-wrap">${sourceBadge}<div class="flex-1 min-w-0">${s.source_url ? urlRow(s.source_url) : ""}</div>${tagChips(s.tags)}</div>`;
+          const foot = `${metaWrap(
+            metaChip("clock", s.created_at ? new Date(s.created_at).toLocaleDateString() : "—")
+          )}${actionsWrap(actionEdit(`/seeds/edit?id=${s.id}`, "Editar semilla") + actBtns)}`;
+          return entityCard({ head, body, foot });
+        })
+        .join("")}</div>`;
     }
 
     byId("seeds-list").addEventListener("click", async (e: MouseEvent) => {

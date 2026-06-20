@@ -10,8 +10,8 @@ import Icon from "../components/Icon.astro";
     <div class="flex items-center justify-between mb-6 gap-2 flex-wrap">
       <h1 class="text-2xl font-bold">Borradores</h1>
       <div class="flex gap-2 flex-wrap">
-        <button class="btn btn-sm btn-outline gap-1.5" id="btn-run-scheduler" title="Publica los borradores programados cuya fecha ya ha llegado">
-          <Icon name="play" size={14} /> Ejecutar planificador
+        <button class="btn btn-outline gap-1.5" id="btn-run-scheduler" title="Publica los borradores programados cuya fecha ya ha llegado">
+          <Icon name="play" size={16} /> Ejecutar planificador
         </button>
         <button class="btn btn-primary gap-1.5" id="btn-generate">
           <Icon name="sparkles" size={16} /> Generar desde idea
@@ -95,6 +95,15 @@ import Icon from "../components/Icon.astro";
   <script>
     import { icon } from "~/scripts/icons";
     import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import {
+      entityCard,
+      contextBadge,
+      statusBadgeSoft,
+      actionBtn,
+      actionEdit,
+      metaChip,
+      metaWrap,
+    } from "~/scripts/card";
     import type { Draft, Idea, SchedulerResult } from "~/scripts/types";
 
     const API = "http://localhost:8000/api";
@@ -103,11 +112,11 @@ import Icon from "../components/Icon.astro";
 
     const ALL_STATUSES = ["draft", "approved", "rejected", "published", "failed"];
     const STATUS_LABELS: Record<string, string> = {
-      draft: "warning",
-      approved: "info",
-      rejected: "error",
-      published: "success",
-      failed: "error",
+      draft: "badge-warning",
+      approved: "badge-info",
+      rejected: "badge-error",
+      published: "badge-success",
+      failed: "badge-error",
     };
     const STATUS_ES: Record<string, string> = {
       draft: "borrador",
@@ -183,61 +192,18 @@ import Icon from "../components/Icon.astro";
       });
     }
 
-    function statusBadge(d: Draft) {
-      const colors: Record<string, string> = {
-        draft: "badge-warning",
-        approved: "badge-info",
-        rejected: "badge-error",
-        published: "badge-success",
-        failed: "badge-error",
-      };
-      return `<span class="badge badge-sm badge-soft ${colors[d.status] || "badge-ghost"}" title="Estado ${statusLabel(d.status)}">${statusLabel(d.status)}</span>`;
-    }
-
-    function mediaCell(d: Draft) {
-      const urls = d.media_urls || [];
-      const paths = d.media_paths || [];
-      const all = [
-        ...urls.map((u) => ({ src: u })),
-        ...paths.map((p) => ({ src: `${API}/media/${p.split("/").pop()}` })),
-      ];
-      if (!all.length) return '<span class="text-base-content/30">—</span>';
-      return `<div class="flex gap-1">${all
-        .slice(0, 3)
-        .map(
-          (m) =>
-            `<img src="${esc(m.src)}" class="w-8 h-8 object-cover rounded" alt="Vista previa del medio" loading="lazy" />`
-        )
-        .join("")}${all.length > 3 ? `<span class="text-xs text-base-content/60 self-center">+${all.length - 3}</span>` : ""}</div>`;
-    }
-
-    function scheduledCell(d: Draft) {
-      return d.scheduled_at
-        ? `<span class="badge badge-sm badge-soft badge-secondary whitespace-nowrap" title="${esc(d.scheduled_at)}">${icon("calendar", 12, "inline-block")} ${new Date(d.scheduled_at).toLocaleString()}</span>`
-        : '<span class="text-base-content/30">—</span>';
-    }
-
-    function draftActions(d: Draft) {
-      const parts: string[] = [
-        `<a href="/drafts/edit?id=${d.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar borrador" title="Editar borrador">${icon("edit", 16)}</a>`,
-      ];
+    function draftActions(d: Draft): string {
+      const parts: string[] = [];
+      if (d.scheduled_at) {
+        parts.push(actionBtn("unschedule", d.id, "calendar-x", "Cancelar programación"));
+      }
+      parts.push(actionEdit(`/drafts/edit?id=${d.id}`, "Editar borrador"));
       if (d.status === "draft") {
-        parts.push(
-          `<button class="btn btn-square btn-ghost btn-sm text-success" data-action="approve" data-id="${d.id}" aria-label="Aprobar borrador" title="Aprobar borrador">${icon("check", 16)}</button>`
-        );
-        parts.push(
-          `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="reject" data-id="${d.id}" aria-label="Rechazar borrador" title="Rechazar (pedir motivo)">${icon("circle-x", 16)}</button>`
-        );
+        parts.push(actionBtn("approve", d.id, "check", "Aprobar borrador", "text-success"));
+        parts.push(actionBtn("reject", d.id, "circle-x", "Rechazar borrador", "text-error"));
       }
       if (d.status === "approved") {
-        parts.push(
-          `<button class="btn btn-square btn-ghost btn-sm text-primary" data-action="publish" data-id="${d.id}" aria-label="Publicar borrador" title="Publicar borrador">${icon("send", 16)}</button>`
-        );
-      }
-      if (d.scheduled_at) {
-        parts.push(
-          `<button class="btn btn-square btn-ghost btn-sm" data-action="unschedule" data-id="${d.id}" aria-label="Cancelar programación" title="Cancelar programación">${icon("calendar-x", 16)}</button>`
-        );
+        parts.push(actionBtn("publish", d.id, "send", "Publicar borrador", "text-primary"));
       }
       return parts.join("");
     }
@@ -259,60 +225,23 @@ import Icon from "../components/Icon.astro";
         return;
       }
 
-      const rows = drafts
-        .map(
-          (d) => `
-          <tr>
-            <td><span class="badge badge-sm badge-ghost capitalize">${esc(d.platform)}</span></td>
-            <td><div class="text-sm text-base-content/70 max-w-xs truncate" title="${esc(d.content || "")}">${d.content ? esc(d.content.substring(0, 100)) + (d.content.length > 100 ? "…" : "") : "—"}</div></td>
-            <td>${mediaCell(d)}</td>
-            <td>${statusBadge(d)}</td>
-            <td>${scheduledCell(d)}</td>
-            <td class="text-sm text-base-content/60">${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</td>
-            <td><div class="flex gap-1">${draftActions(d)}</div></td>
-          </tr>`
-        )
-        .join("");
-
-      const cards = drafts
-        .map(
-          (d) => `
-          <div class="card bg-base-100 border border-base-300 shadow-sm">
-            <div class="card-body p-4 gap-2">
-              <div class="flex items-center justify-between gap-2">
-                <span class="badge badge-sm badge-ghost capitalize">${esc(d.platform)}</span>
-                ${statusBadge(d)}
-              </div>
-              <p class="text-sm text-base-content/80 line-clamp-3">${d.content ? esc(d.content.substring(0, 200)) + (d.content.length > 200 ? "…" : "") : "—"}</p>
-              ${mediaCell(d)}
-              <div class="flex items-center justify-between gap-2 text-xs text-base-content/60 flex-wrap">
-                <span>${scheduledCell(d)}</span>
-                <span>${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</span>
-              </div>
-              <div class="flex gap-1 pt-1 border-t border-base-200">${draftActions(d)}</div>
-            </div>
-          </div>`
-        )
-        .join("");
-
-      container.innerHTML = `
-        <div class="hidden md:block overflow-x-auto">
-          <table class="table table-zinc">
-            <thead>
-              <tr>
-                <th>Plataforma</th>
-                <th>Contenido</th>
-                <th>Multimedia</th>
-                <th>Estado</th>
-                <th>Programado</th>
-                <th>Creado</th>
-                <th><span class="sr-only">Acciones</span></th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-        <div class="md:hidden flex flex-col gap-3">${cards}</div>`;
+      container.innerHTML = `<div class="flex flex-col gap-3">${drafts
+        .map((d) => {
+          const head = `${statusBadgeSoft(
+            statusLabel(d.status),
+            STATUS_LABELS[d.status] || "badge-ghost"
+          )}`;
+          const body = `<div class="line-clamp-3" title="${escAttr(d.content || "")}">${esc(d.content || "—")}</div>`;
+          const meta =
+            metaChip("clock", d.created_at ? new Date(d.created_at).toLocaleDateString() : "—") +
+            contextBadge(null, d.platform, "Plataforma");
+          const scheduledBadge = d.scheduled_at
+            ? `<span class="badge badge-sm badge-soft badge-secondary whitespace-nowrap" title="${escAttr(d.scheduled_at)}">${icon("calendar", 12, "inline-block")} ${new Date(d.scheduled_at).toLocaleString()}</span>`
+            : "";
+          const foot = `${metaWrap(meta)}<div class="flex items-center gap-2 ml-auto shrink-0">${scheduledBadge}${draftActions(d)}</div>`;
+          return entityCard({ head, body, foot });
+        })
+        .join("")}</div>`;
     }
 
     byId("drafts-list").addEventListener("click", async (e: MouseEvent) => {
@@ -455,7 +384,7 @@ import Icon from "../components/Icon.astro";
           (st) => `
           <label class="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" class="checkbox checkbox-xs" data-status="${st}" ${checked.has(st) ? "checked" : ""} />
-            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${statusLabel(st)}</span>
+            <span class="badge badge-sm badge-soft ${STATUS_LABELS[st]}">${statusLabel(st)}</span>
           </label>`
         ).join("");
         container.innerHTML += `

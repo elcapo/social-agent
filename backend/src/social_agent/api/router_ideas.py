@@ -36,6 +36,14 @@ class UpdateIdeaRequest(BaseModel):
     comment: Optional[str] = None
 
 
+def _enrich_source_name(idea: Idea) -> Idea:
+    if not idea.source_name and idea.seed_id:
+        seed = seed_store.get(idea.seed_id)
+        if seed and seed.source_name:
+            idea.source_name = seed.source_name
+    return idea
+
+
 @router.get("/ideas")
 def list_ideas(
     status: Optional[str] = None,
@@ -58,7 +66,7 @@ def list_ideas(
         return True
     items = idea_store.list(filter_fn=_filter)
     items.sort(key=lambda i: i.created_at or "", reverse=True)
-    return items
+    return [_enrich_source_name(i) for i in items]
 
 
 @router.get("/ideas/{idea_id}")
@@ -66,7 +74,7 @@ def get_idea(idea_id: str) -> Idea:
     idea = idea_store.get(idea_id)
     if not idea:
         raise HTTPException(404, f"Idea '{idea_id}' not found")
-    return idea
+    return _enrich_source_name(idea)
 
 
 @router.post("/ideas/generate", status_code=201)
