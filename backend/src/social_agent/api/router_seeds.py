@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from social_agent.collectors.base import CollectedItem
-from social_agent.collectors.link_scraper import LinkScraperCollector
+from social_agent.collectors.link_scraper import LinkScraperCollector, scrape_url
 from social_agent.collectors.rss import RSSCollector
 from social_agent.collectors.scraper import WebScraperCollector
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
@@ -37,6 +38,25 @@ class UpdateSeedRequest(BaseModel):
     status: Optional[str] = None
     title: Optional[str] = None
     source_url: Optional[str] = None
+
+
+class ScrapeRequest(BaseModel):
+    url: str
+    renderer: str = "httpx"
+
+
+class ScrapeResponse(BaseModel):
+    title: str
+    content: str
+
+
+class CreateSeedRequest(BaseModel):
+    url: str
+    title: Optional[str] = None
+    content: Optional[str] = None
+    tags: list[str] = []
+    scrape: bool = True
+    renderer: str = "httpx"
 
 
 def _build_collector(source: Source):
@@ -179,5 +199,49 @@ def update_seed(seed_id: str, body: UpdateSeedRequest) -> Seed:
     if body.source_url is not None:
         seed.source_url = body.source_url
 
+    seed_store.save(seed)
+    return seed
+
+
+@router.post("/seeds/scrape", response_model=ScrapeResponse)
+def scrape_article(body: ScrapeRequest) -> ScrapeResponse:
+    try:
+        title, content = scrape_url(body.url, renderer=body.renderer)
+    except Exception as e:
+        raise HTTPException(400, f"Failed to scrape URL: {e}")
+    return ScrapeResponse(title=title, content=content)
+
+
+@router.post("/seeds", status_code=201, response_model=Seed)
+def create_seed(body: CreateSeedRequest) -> Seed:
+    title = body.title
+    content = body.content
+
+    if body.scrape and (not title or not content):
+        try:
+            scraped_title, scraped_content = scrape_url(body.url, renderer=body.renderer)
+        except Exception as e:
+            raise HTTPException(400, f"Failed to scrape URL: {e}")
+        if not title:
+            title = scraped_title or body.url
+        if not content:
+            content = scraped_content
+
+    if not title:
+        title = body.url
+
+    parsed = urlparse(body.url)
+    domain = parsed.hostname or body.url
+    source_name = f"{domain} (manual)"
+
+    seed = Seed(
+        title=title,
+        content=content or "",
+        source_id=None,
+        source_url=body.url,
+        source_name=source_name,
+        tags=body.tags,
+        status=SeedStatus.pending,
+    )
     seed_store.save(seed)
     return seed

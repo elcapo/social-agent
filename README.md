@@ -203,6 +203,15 @@ social-agent seeds generate --interests data/prompts/mis-intereses.md
 # Ver la respuesta cruda del LLM sin guardar (útil para depuración)
 social-agent seeds generate --dry-run
 
+# Añadir un artículo individual a partir de su URL (scrapea título y contenido)
+social-agent seeds add "https://ejemplo.com/articulo"
+
+# Añadir con título y contenido manuales (sin scrapeo)
+social-agent seeds add "https://ejemplo.com/articulo" --no-scrape --title "Título" --content "Contenido"
+
+# Añadir con tags
+social-agent seeds add "https://ejemplo.com/articulo" --tags "tech, ai"
+
 # Ver todas las semillas
 social-agent seeds list
 
@@ -376,6 +385,8 @@ La API está documentada automáticamente con OpenAPI:
 | `DELETE` | `/api/sources/{id}` | Eliminar fuente |
 | `GET` | `/api/seeds` | Listar semillas (filtros opcionales: `?status=pending`, `?statuses=pending&statuses=approved`, `?q=keyword`, `&url=fragment`) |
 | `GET` | `/api/seeds/{id}` | Obtener semilla |
+| `POST` | `/api/seeds` | Añadir artículo manualmente (body: `{"url": "...", "title?": "...", "content?": "...", "tags?": [...], "scrape?": true}`) |
+| `POST` | `/api/seeds/scrape` | Previsualizar contenido de una URL sin guardar (body: `{"url": "..."}`) |
 | `POST` | `/api/seeds/generate` | Generar semillas desde fuentes |
 | `PATCH` | `/api/seeds/{id}` | Actualizar semilla |
 | `GET` | `/api/ideas` | Listar ideas (`?status=pending`) |
@@ -404,6 +415,16 @@ curl -X POST "http://localhost:8000/api/sources?name=Rust+Blog&source_type=rss&u
 
 # Listar fuentes
 curl http://localhost:8000/api/sources
+
+# Añadir un artículo individual como semilla (scrapea título y contenido)
+curl -X POST http://localhost:8000/api/seeds \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://ejemplo.com/articulo"}'
+
+# Previsualizar el contenido scrapeado sin guardarlo
+curl -X POST http://localhost:8000/api/seeds/scrape \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://ejemplo.com/articulo"}'
 
 # Generar semillas
 curl -X POST http://localhost:8000/api/seeds/generate \

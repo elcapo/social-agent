@@ -7,8 +7,55 @@ from urllib.parse import urljoin
 import httpx
 from bs4 import BeautifulSoup
 
+from social_agent.utils import html_to_markdown
+
 from .base import BaseCollector, CollectedItem
 from .playwright_utils import PlaywrightBrowser
+
+
+def _fetch_page(url: str, renderer: str = "httpx") -> tuple[BeautifulSoup, str]:
+    if renderer == "playwright":
+        with PlaywrightBrowser() as browser:
+            return browser.fetch_page(url)
+    response = httpx.get(url, follow_redirects=True, timeout=30)
+    response.raise_for_status()
+    return BeautifulSoup(response.text, "html.parser"), str(response.url)
+
+
+def _extract_title(soup: BeautifulSoup) -> str:
+    if soup.title:
+        title = soup.title.get_text(strip=True)
+        if title:
+            return title
+    h1 = soup.find("h1")
+    if h1:
+        return h1.get_text(strip=True)
+    return ""
+
+
+def _extract_content_html(soup: BeautifulSoup) -> str:
+    for tag in soup(["script", "style", "nav", "footer", "header"]):
+        tag.decompose()
+    article = soup.find("article")
+    if article and len(article.get_text(strip=True)) < 500:
+        article = None
+    container = article or soup.find("main") or soup.find("body")
+    if container is None:
+        return ""
+    return str(container)
+
+
+def scrape_url(url: str, renderer: str = "httpx") -> tuple[str, str]:
+    """Fetch a single URL and return (title, content_markdown).
+
+    Reuses the extraction logic of LinkScraperCollector for a one-off scrape
+    without requiring a Source. Raises httpx.HTTPError on network failures.
+    """
+    soup, _ = _fetch_page(url, renderer=renderer)
+    title = _extract_title(soup)
+    html = _extract_content_html(soup)
+    content = html_to_markdown(html) if html else ""
+    return title, content
 
 
 class LinkScraperCollector(BaseCollector):
@@ -72,18 +119,12 @@ class LinkScraperCollector(BaseCollector):
             links.append({"url": abs_url, "title": title})
         return links
 
-    def _fetch_page_httpx(self, url: str) -> tuple[BeautifulSoup, str]:
-        response = httpx.get(url, follow_redirects=True, timeout=30)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        return soup, str(response.url)
-
     def _fetch_page(self, url: str) -> tuple[BeautifulSoup, str]:
         if self.renderer == "playwright":
             if self._browser is None:
                 self._browser = PlaywrightBrowser()
             return self._browser.fetch_page(url)
-        return self._fetch_page_httpx(url)
+        return _fetch_page(url, "httpx")
 
     def _close_browser(self) -> None:
         if self._browser is not None:

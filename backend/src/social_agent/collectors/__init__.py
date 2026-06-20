@@ -1,5 +1,5 @@
 from .base import BaseCollector, CollectedItem
-from .link_scraper import LinkScraperCollector
+from .link_scraper import LinkScraperCollector, scrape_url
 from .playwright_utils import PlaywrightBrowser
 from .rss import RSSCollector
 from .scraper import WebScraperCollector
@@ -14,4 +14,5 @@ __all__ = [
     "WebScraperCollector",
     "TwitterCollector",
     "LinkedInCollector",
+    "scrape_url",
 ]

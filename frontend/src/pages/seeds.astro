@@ -9,8 +9,9 @@ import Nav from "../components/Nav.astro";
     <div class="flex items-center justify-between mb-6 gap-2 flex-wrap">
       <h1 class="text-2xl font-bold">Seeds</h1>
       <div class="flex gap-2">
-        <button class="btn btn-primary" id="btn-generate-interests">Generate from interests</button>
-        <button class="btn btn-primary" id="btn-generate-sources">Generate from sources</button>
+        <button class="btn btn-primary" id="btn-add-article">Add article</button>
+        <button class="btn btn-outline" id="btn-generate-interests">Generate from interests</button>
+        <button class="btn btn-outline" id="btn-generate-sources">Generate from sources</button>
       </div>
     </div>
 
@@ -64,6 +65,35 @@ import Nav from "../components/Nav.astro";
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
+  <dialog id="add-article-modal" class="modal">
+    <div class="modal-box max-w-2xl">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xl font-bold">Add article</legend>
+        <p class="text-sm text-base-content/50 mb-2">Paste a URL to scrape its content, or fill in the fields manually.</p>
+
+        <label class="label">URL</label>
+        <div class="flex gap-2">
+          <input type="url" id="add-article-url" class="input flex-1" placeholder="https://..." />
+          <button class="btn btn-outline shrink-0" id="add-article-fetch">Fetch</button>
+        </div>
+
+        <label class="label mt-2">Title</label>
+        <input type="text" id="add-article-title" class="input w-full" placeholder="Article title" />
+
+        <label class="label mt-2">Content</label>
+        <textarea id="add-article-content" class="textarea w-full" rows="10" placeholder="Article content..."></textarea>
+
+        <label class="label mt-2">Tags (comma-separated)</label>
+        <input type="text" id="add-article-tags" class="input w-full" placeholder="tech, ai, ethics" />
+      </fieldset>
+      <div class="modal-action">
+        <button class="btn" id="add-article-cancel">Cancel</button>
+        <button class="btn btn-primary" id="add-article-save" disabled>Save</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+
   <script>
     const API = "http://localhost:8000/api";
 
@@ -98,7 +128,7 @@ import Nav from "../components/Nav.astro";
       const container = document.getElementById("seeds-list");
 
       if (!seeds.length) {
-        container.innerHTML = '<div class="alert bg-base-200 text-sm">No seeds yet. Click "Generate from interests" or "Generate from sources" to create some.</div>';
+        container.innerHTML = '<div class="alert bg-base-200 text-sm">No seeds yet. Click "Add article" to paste a URL, or "Generate from sources" to collect from your configured sources.</div>';
         return;
       }
 
@@ -314,6 +344,96 @@ import Nav from "../components/Nav.astro";
       } finally {
         btn.disabled = false;
         btn.textContent = "Generate";
+      }
+    });
+
+    // ── Add article ──
+
+    const addModal = document.getElementById("add-article-modal");
+    const addUrlInput = document.getElementById("add-article-url");
+    const addTitleInput = document.getElementById("add-article-title");
+    const addContentInput = document.getElementById("add-article-content");
+    const addTagsInput = document.getElementById("add-article-tags");
+    const addFetchBtn = document.getElementById("add-article-fetch");
+    const addSaveBtn = document.getElementById("add-article-save");
+
+    function updateAddSaveButton() {
+      addSaveBtn.disabled = !addUrlInput.value.trim() || !addTitleInput.value.trim();
+    }
+
+    addUrlInput.addEventListener("input", updateAddSaveButton);
+    addTitleInput.addEventListener("input", updateAddSaveButton);
+
+    document.getElementById("btn-add-article").addEventListener("click", () => {
+      hideError();
+      addUrlInput.value = "";
+      addTitleInput.value = "";
+      addContentInput.value = "";
+      addTagsInput.value = "";
+      addFetchBtn.disabled = false;
+      addFetchBtn.textContent = "Fetch";
+      addSaveBtn.disabled = true;
+      addModal.showModal();
+    });
+
+    document.getElementById("add-article-cancel").addEventListener("click", () => {
+      addModal.close();
+    });
+
+    addFetchBtn.addEventListener("click", async () => {
+      const url = addUrlInput.value.trim();
+      if (!url) { showError("Enter a URL first."); return; }
+
+      addFetchBtn.disabled = true;
+      addFetchBtn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Fetching...';
+      hideError();
+
+      try {
+        const res = await fetch(`${API}/seeds/scrape`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        const data = await res.json();
+        if (data.title) addTitleInput.value = data.title;
+        if (data.content) addContentInput.value = data.content;
+        updateAddSaveButton();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        addFetchBtn.disabled = false;
+        addFetchBtn.textContent = "Fetch";
+      }
+    });
+
+    addSaveBtn.addEventListener("click", async () => {
+      const url = addUrlInput.value.trim();
+      const title = addTitleInput.value.trim();
+      const content = addContentInput.value.trim();
+      const tags = addTagsInput.value.split(",").map(t => t.trim()).filter(Boolean);
+
+      if (!url || !title) { showError("URL and title are required."); return; }
+
+      addSaveBtn.disabled = true;
+      addSaveBtn.textContent = "Saving...";
+      hideError();
+
+      try {
+        const res = await fetch(`${API}/seeds`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, title, content, tags, scrape: false }),
+        });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+
+        addModal.close();
+        load();
+      } catch (e) {
+        showError("Error: " + e.message);
+      } finally {
+        addSaveBtn.disabled = false;
+        addSaveBtn.textContent = "Save";
       }
     });
 

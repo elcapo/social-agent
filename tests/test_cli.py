@@ -10,6 +10,7 @@ from social_agent.cli.commands import cli
 from social_agent.config import settings as global_settings
 from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.idea import Idea
+from social_agent.models.seed import Seed
 from social_agent.storage.markdown_store import MarkdownStore
 
 
@@ -24,6 +25,13 @@ def cli_draft_store(tmp_path: Path) -> MarkdownStore[Draft]:
 def cli_idea_store(tmp_path: Path) -> MarkdownStore[Idea]:
     store = MarkdownStore[Idea](tmp_path / "ideas", Idea)
     with patch("social_agent.cli.commands.idea_store", store):
+        yield store
+
+
+@pytest.fixture
+def cli_seed_store(tmp_path: Path) -> MarkdownStore[Seed]:
+    store = MarkdownStore[Seed](tmp_path / "seeds", Seed)
+    with patch("social_agent.cli.commands.seed_store", store):
         yield store
 
 
@@ -274,3 +282,103 @@ class TestIdeasShow:
         result = runner.invoke(cli, ["ideas", "show", idea.id])
         assert result.exit_code == 0
         assert "Comment:" not in result.output
+
+
+class TestSeedsAdd:
+    def test_add_with_scrape(self, runner, cli_seed_store):
+        with patch(
+            "social_agent.cli.commands.scrape_url",
+            return_value=("Scraped Title", "Scraped body in markdown"),
+        ):
+            result = runner.invoke(cli, ["seeds", "add", "https://example.com/article"])
+        assert result.exit_code == 0
+        assert "Seed added" in result.output
+        seeds = cli_seed_store.list()
+        assert len(seeds) == 1
+        assert seeds[0].title == "Scraped Title"
+        assert seeds[0].content == "Scraped body in markdown"
+        assert seeds[0].source_url == "https://example.com/article"
+        assert seeds[0].source_name == "example.com (manual)"
+        assert seeds[0].source_id is None
+        assert seeds[0].tags == []
+
+    def test_add_with_manual_overrides(self, runner, cli_seed_store):
+        with patch("social_agent.cli.commands.scrape_url") as mock_scrape:
+            result = runner.invoke(cli, [
+                "seeds", "add", "https://example.com/article",
+                "--title", "Manual Title",
+                "--content", "Manual content",
+                "--tags", "tech, ai",
+            ])
+        assert result.exit_code == 0
+        assert "Manual Title" in result.output
+        seeds = cli_seed_store.list()
+        assert len(seeds) == 1
+        assert seeds[0].title == "Manual Title"
+        assert seeds[0].content == "Manual content"
+        assert seeds[0].tags == ["tech", "ai"]
+        mock_scrape.assert_not_called()
+
+    def test_add_no_scrape(self, runner, cli_seed_store):
+        with patch("social_agent.cli.commands.scrape_url") as mock_scrape:
+            result = runner.invoke(cli, [
+                "seeds", "add", "https://example.com/article",
+                "--no-scrape",
+                "--title", "Manual Title",
+                "--content", "Manual content",
+            ])
+        assert result.exit_code == 0
+        seeds = cli_seed_store.list()
+        assert len(seeds) == 1
+        assert seeds[0].title == "Manual Title"
+        mock_scrape.assert_not_called()
+
+    def test_add_no_scrape_without_title_errors(self, runner, cli_seed_store):
+        with patch("social_agent.cli.commands.scrape_url") as mock_scrape:
+            result = runner.invoke(cli, [
+                "seeds", "add", "https://example.com/article",
+                "--no-scrape",
+                "--content", "Some content",
+            ])
+        assert result.exit_code == 0
+        assert "--title is required" in result.output
+        mock_scrape.assert_not_called()
+        assert len(cli_seed_store.list()) == 0
+
+    def test_add_scrape_failure(self, runner, cli_seed_store):
+        with patch(
+            "social_agent.cli.commands.scrape_url",
+            side_effect=RuntimeError("network error"),
+        ):
+            result = runner.invoke(cli, ["seeds", "add", "https://example.com/bad"])
+        assert result.exit_code == 0
+        assert "Failed to scrape" in result.output
+        assert "network error" in result.output
+        assert len(cli_seed_store.list()) == 0
+
+    def test_add_scrapes_only_when_field_missing(self, runner, cli_seed_store):
+        with patch(
+            "social_agent.cli.commands.scrape_url",
+            return_value=("Scraped Title", "Scraped Content"),
+        ) as mock_scrape:
+            result = runner.invoke(cli, [
+                "seeds", "add", "https://example.com/article",
+                "--title", "Manual Title",
+            ])
+        assert result.exit_code == 0
+        seeds = cli_seed_store.list()
+        assert seeds[0].title == "Manual Title"
+        assert seeds[0].content == "Scraped Content"
+        mock_scrape.assert_called_once()
+
+    def test_add_allows_duplicate_url(self, runner, cli_seed_store):
+        with patch(
+            "social_agent.cli.commands.scrape_url",
+            return_value=("Title", "Content"),
+        ):
+            r1 = runner.invoke(cli, ["seeds", "add", "https://example.com/dup"])
+            r2 = runner.invoke(cli, ["seeds", "add", "https://example.com/dup"])
+        assert r1.exit_code == 0
+        assert r2.exit_code == 0
+        seeds = cli_seed_store.list()
+        assert len(seeds) == 2

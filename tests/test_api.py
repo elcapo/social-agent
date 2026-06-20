@@ -400,6 +400,143 @@ class TestSeedsAPI:
         assert data[0]["title"] == "AI Future"
 
 
+class TestScrapeSeedAPI:
+    def test_scrape_preview(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Scraped Title", "Scraped content in markdown"),
+        ):
+            resp = client.post("/api/seeds/scrape", json={"url": "https://example.com/article"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["title"] == "Scraped Title"
+        assert data["content"] == "Scraped content in markdown"
+
+    def test_scrape_preview_does_not_persist(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Scraped Title", "Scraped content"),
+        ):
+            client.post("/api/seeds/scrape", json={"url": "https://example.com/article"})
+        seeds = client.get("/api/seeds").json()
+        assert len(seeds) == 0
+
+    def test_scrape_preview_failure(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            side_effect=RuntimeError("network error"),
+        ):
+            resp = client.post("/api/seeds/scrape", json={"url": "https://example.com/bad"})
+        assert resp.status_code == 400
+        assert "network error" in resp.json()["detail"]
+
+    def test_scrape_preview_with_renderer(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Title", "Content"),
+        ) as mock_scrape:
+            resp = client.post("/api/seeds/scrape", json={
+                "url": "https://example.com/article",
+                "renderer": "playwright",
+            })
+        assert resp.status_code == 200
+        mock_scrape.assert_called_once_with("https://example.com/article", renderer="playwright")
+
+
+class TestCreateSeedAPI:
+    def test_create_seed_with_scrape(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Article Title", "Article body in markdown"),
+        ):
+            resp = client.post("/api/seeds", json={"url": "https://example.com/article"})
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["title"] == "Article Title"
+        assert data["content"] == "Article body in markdown"
+        assert data["source_url"] == "https://example.com/article"
+        assert data["source_name"] == "example.com (manual)"
+        assert data["source_id"] is None
+        assert data["status"] == "pending"
+        assert data["tags"] == []
+
+    def test_create_seed_persists(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Title", "Content"),
+        ):
+            resp = client.post("/api/seeds", json={"url": "https://example.com/a"})
+        seed_id = resp.json()["id"]
+        fetched = client.get(f"/api/seeds/{seed_id}")
+        assert fetched.status_code == 200
+        assert fetched.json()["title"] == "Title"
+
+    def test_create_seed_with_manual_overrides(self, client):
+        with patch("social_agent.api.router_seeds.scrape_url") as mock_scrape:
+            resp = client.post("/api/seeds", json={
+                "url": "https://example.com/article",
+                "title": "Manual Title",
+                "content": "Manual content",
+                "tags": ["tech", "ai"],
+            })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["title"] == "Manual Title"
+        assert data["content"] == "Manual content"
+        assert data["tags"] == ["tech", "ai"]
+        mock_scrape.assert_not_called()
+
+    def test_create_seed_no_scrape(self, client):
+        with patch("social_agent.api.router_seeds.scrape_url") as mock_scrape:
+            resp = client.post("/api/seeds", json={
+                "url": "https://example.com/article",
+                "title": "Manual Title",
+                "content": "Manual content",
+                "scrape": False,
+            })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["title"] == "Manual Title"
+        assert data["content"] == "Manual content"
+        mock_scrape.assert_not_called()
+
+    def test_create_seed_scrape_failure(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            side_effect=RuntimeError("connection refused"),
+        ):
+            resp = client.post("/api/seeds", json={"url": "https://example.com/bad"})
+        assert resp.status_code == 400
+        assert "connection refused" in resp.json()["detail"]
+
+    def test_create_seed_partial_override_uses_scrape_for_missing(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Scraped Title", "Scraped Content"),
+        ):
+            resp = client.post("/api/seeds", json={
+                "url": "https://example.com/article",
+                "title": "Manual Title",
+            })
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["title"] == "Manual Title"
+        assert data["content"] == "Scraped Content"
+
+    def test_create_seed_allows_duplicate_url(self, client):
+        with patch(
+            "social_agent.api.router_seeds.scrape_url",
+            return_value=("Title", "Content"),
+        ):
+            resp1 = client.post("/api/seeds", json={"url": "https://example.com/dup"})
+            resp2 = client.post("/api/seeds", json={"url": "https://example.com/dup"})
+        assert resp1.status_code == 201
+        assert resp2.status_code == 201
+        assert resp1.json()["id"] != resp2.json()["id"]
+        all_seeds = client.get("/api/seeds").json()
+        assert len(all_seeds) == 2
+
+
 # ── Ideas ──
 
 

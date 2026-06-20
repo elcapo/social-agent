@@ -380,3 +380,63 @@ distinción clara entre los hechos de la noticia y la voz del autor.
 - [x] 12.5 — CLI `ideas show` muestra el comentario; nuevo `ideas comment <id> <texto>` con `--clear`
 - [x] 12.6 — Frontend: textarea en edición + icono indicador en lista
 - [x] 12.7 — Tests: 330 tests totales, todos pasan (22 nuevos)
+
+---
+
+## Fase 13 — Alta manual de seeds desde URL
+
+### Contexto
+
+El pipeline `seed → idea → draft` solo permitía crear seeds desde fuentes
+configuradas (`POST /api/seeds/generate`), que recolecta en lote desde RSS,
+scrapers o social collectors. No existía vía para añadir un artículo individual
+a partir de su URL, aunque `SourceType.manual` estaba definido en el modelo
+`Source` pero sin usar, y `LinkScraperCollector` ya tenía la lógica de scrapeo
+individual.
+
+### Plan de implementación
+
+#### 13.1 Refactorizar `link_scraper.py`
+
+- Extraer `scrape_url(url, renderer) -> (title, content_markdown)` como función
+  de módulo reutilizable, sin requerir una `Source`
+- Extraer helpers `_fetch_page`, `_extract_title`, `_extract_content_html`
+- `LinkScraperCollector._fetch_page` delega al helper de módulo para el caso
+  httpx; mantiene browser persistente para playwright
+- Exportar `scrape_url` desde `collectors/__init__.py`
+
+#### 13.2 API REST
+
+- `POST /api/seeds/scrape` — previsualiza el contenido de una URL sin guardar
+  (body: `{url, renderer?}`)
+- `POST /api/seeds` — alta manual de seed:
+  - Body: `{url (req), title?, content?, tags?, scrape?, renderer?}`
+  - Si `scrape=true` (default) y falta title/content, llama a `scrape_url`
+  - `source_name = f"{domain} (manual)"`, `source_id = None`, `status = pending`
+  - Sin dedup: permite crear varios seeds con la misma URL
+  - Devuelve 201 + el seed
+
+#### 13.3 CLI
+
+- `social-agent seeds add <url>` con flags `--title`, `--content`, `--tags`,
+  `--no-scrape`, `--renderer`
+
+#### 13.4 Frontend (Astro)
+
+- Botón "Add article" en `seeds.astro`
+- Modal con: input URL + botón "Fetch" (scrapea y rellena), inputs editables
+  de título, contenido y tags, botón "Save"
+- Empty state actualizado
+
+#### 13.5 Tests
+
+- `test_api.py`: `TestScrapeSeedAPI` (4 tests) + `TestCreateSeedAPI` (7 tests)
+- `test_cli.py`: `TestSeedsAdd` (7 tests)
+
+### Fase 13 — Alta manual de seeds desde URL
+
+- [x] 13.1 — `scrape_url()` refactorizado en `link_scraper.py` + exportado
+- [x] 13.2 — `POST /api/seeds/scrape` (preview) + `POST /api/seeds` (alta manual)
+- [x] 13.3 — CLI `seeds add <url>` con `--no-scrape`, `--title`, `--content`, `--tags`, `--renderer`
+- [x] 13.4 — Frontend: botón "Add article" + modal con fetch + campos editables
+- [x] 13.5 — Tests: 348 tests totales, todos pasan (18 nuevos)

@@ -8,7 +8,12 @@ import frontmatter
 
 from social_agent.agents.ideator import IdeatorAgent
 from social_agent.agents.writer import WriterAgent
-from social_agent.collectors import LinkScraperCollector, RSSCollector, WebScraperCollector
+from social_agent.collectors import (
+    LinkScraperCollector,
+    RSSCollector,
+    WebScraperCollector,
+    scrape_url,
+)
 from social_agent.collectors.social import LinkedInCollector, TwitterCollector
 from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
@@ -228,6 +233,57 @@ def seeds_list(status: str | None) -> None:
         return
     for s in items:
         click.echo(f"  [{s.id}] {s.title} ({s.status.value})")
+
+
+@seeds.command("add")
+@click.argument("url")
+@click.option("--title", default=None, help="Override the scraped title")
+@click.option("--content", default=None, help="Override the scraped content")
+@click.option("--tags", default="", help="Comma-separated tags")
+@click.option("--no-scrape", is_flag=True, help="Skip scraping; require --title and --content")
+@click.option("--renderer", default="httpx", type=click.Choice(["httpx", "playwright"]),
+              help="Renderer for scraping (default: httpx)")
+def seeds_add(url: str, title: str | None, content: str | None, tags: str,
+              no_scrape: bool, renderer: str) -> None:
+    """Add a single article as a seed from its URL."""
+    from urllib.parse import urlparse
+
+    if no_scrape and not title:
+        click.echo("With --no-scrape, --title is required.")
+        return
+
+    if not no_scrape and (not title or not content):
+        try:
+            scraped_title, scraped_content = scrape_url(url, renderer=renderer)
+        except Exception as e:
+            click.echo(f"Failed to scrape URL: {e}")
+            return
+        if not title:
+            title = scraped_title or url
+        if not content:
+            content = scraped_content
+
+    if not title:
+        title = url
+
+    parsed = urlparse(url)
+    domain = parsed.hostname or url
+    source_name = f"{domain} (manual)"
+
+    seed = Seed(
+        title=title,
+        content=content or "",
+        source_id=None,
+        source_url=url,
+        source_name=source_name,
+        tags=[t.strip() for t in tags.split(",") if t.strip()],
+        status=SeedStatus.pending,
+    )
+    seed_store.save(seed)
+    click.echo(f"Seed added: {seed.id}")
+    click.echo(f"  Title:  {seed.title}")
+    click.echo(f"  URL:    {seed.source_url}")
+    click.echo(f"  Source: {seed.source_name}")
 
 
 @seeds.command("show")
