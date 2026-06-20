@@ -16,6 +16,12 @@ const { title } = Astro.props;
     <title>{title} — social-agent</title>
   </head>
   <body class="min-h-screen bg-base-100 text-base-content font-sans">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[100] focus:btn focus:btn-primary focus:btn-sm"
+    >
+      Saltar al contenido
+    </a>
     <slot />
   </body>
 </html>

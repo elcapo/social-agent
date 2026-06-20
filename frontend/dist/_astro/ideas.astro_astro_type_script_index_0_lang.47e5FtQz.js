@@ -1,0 +1,35 @@
+import{i as u}from"./icons.CavvgR0t.js";import{b as n,g as h,e as c,q as p,a as y}from"./dom.1PcoZyDp.js";const m="http://localhost:8000/api",g=n("error-msg"),$=["pending","used","discarded"],k={pending:"warning",used:"success",discarded:"error"},L={pending:"pendiente",used:"usado",discarded:"descartado"},x=e=>L[e]||e,i={statuses:[],q:""},l=new Set,T=new URLSearchParams(window.location.search),b=T.get("status");b&&$.includes(b)&&(i.statuses=[b],l.add("status"));function v(e){g.textContent=e,g.classList.remove("hidden")}function f(){g.classList.add("hidden")}function S(e){return new Promise(t=>{const s=n("confirm-dialog");n("confirm-msg").textContent=e,s.showModal(),setTimeout(()=>n("confirm-yes").focus(),0),n("confirm-yes").onclick=()=>{s.close(),t(!0)},n("confirm-no").onclick=()=>{s.close(),t(!1)}})}async function d(){f();const e=new URLSearchParams;i.statuses.forEach(a=>e.append("statuses",a)),i.q&&e.set("q",i.q);const t=e.toString(),r=await(await fetch(`${m}/ideas${t?"?"+t:""}`)).json(),o=n("ideas-list");if(!r.length){o.innerHTML='<div class="alert bg-base-200 text-sm">Aún no hay ideas. Pulsa "Generar idea" para crear una a partir de una semilla.</div>';return}o.innerHTML=`<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
+        ${r.map(a=>{const E=a.comment?`<span class="text-info shrink-0" title="Tiene comentario para el escritor">${u("message-circle",15)}</span>`:"";return`
+        <li class="list-row items-center gap-3 py-3">
+          <div class="min-w-0 flex-1 max-w-[75%]">
+            <div class="font-medium flex items-center gap-1.5" title="${c(a.title)}">
+              ${E}
+              <span class="truncate">${c(a.title)}</span>
+            </div>
+            <div class="text-sm text-base-content/60 mt-1 line-clamp-2">${c(a.summary||"")}</div>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs text-base-content/60">semilla: ${c(a.seed_id||"")}</span>
+              ${a.source_url?`<a href="${c(a.source_url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline truncate max-w-[200px]" title="${c(a.source_url)}">${c(a.source_url)}</a>`:""}
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0 ml-auto">
+            <span class="badge badge-md badge-soft whitespace-nowrap ${a.status==="pending"?"badge-warning":a.status==="used"?"badge-success":"badge-error"}" title="Estado ${x(a.status)}">${x(a.status)}</span>
+            <span class="text-sm text-base-content/60 whitespace-nowrap">${a.created_at?new Date(a.created_at).toLocaleDateString():"—"}</span>
+            <div class="flex gap-1">${a.status==="pending"?`<button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${a.id}" aria-label="Descartar idea" title="Descartar idea">${u("close",16)}</button>`:""}<a href="/ideas/edit?id=${a.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar idea" title="Editar idea">${u("edit",16)}</a>${a.status!=="used"?`<button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${a.id}" aria-label="Eliminar idea" title="Eliminar idea">${u("trash",16)}</button>`:""}</div>
+          </div>
+        </li>`}).join("")}
+      </ul>`}n("ideas-list").addEventListener("click",async e=>{const t=e.target.closest("[data-action]");if(!t)return;f();const s=t.dataset.id??"";try{switch(t.dataset.action){case"discard":{const r=await fetch(`${m}/ideas/${s}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:"discarded"})});if(!r.ok)throw new Error(await h(r));break}case"delete":{if(!await S("¿Eliminar esta idea permanentemente?"))return;const o=await fetch(`${m}/ideas/${s}`,{method:"DELETE"});if(!o.ok)throw new Error(await h(o));break}}d()}catch(r){v("Error: "+r.message)}});n("btn-generate").addEventListener("click",async()=>{f();const e=n("generate-modal"),t=n("seed-select"),r=await(await fetch(`${m}/seeds?status=approved`)).json();t.innerHTML=r.length?r.map(o=>`<option value="${o.id}">${c(o.title)}</option>`).join(""):'<option value="">No hay semillas aprobadas</option>',e.showModal(),setTimeout(()=>t.focus(),0)});n("modal-cancel").addEventListener("click",()=>{n("generate-modal").close()});n("modal-generate").addEventListener("click",async()=>{const e=n("seed-select").value;if(!e){v("Selecciona una semilla.");return}const t=n("modal-generate");t.disabled=!0,t.textContent="Generando…",f();try{const s=await fetch(`${m}/ideas/generate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({seed_id:e,interests:""})});if(!s.ok)throw new Error(await h(s));n("generate-modal").close(),d()}catch(s){v("Error: "+s.message)}finally{t.disabled=!1,t.textContent="Generar"}});function w(){const e=n("active-filters");if(e.innerHTML="",l.has("status")){const t=new Set(i.statuses),s=$.map(r=>`
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-xs" data-status="${r}" ${t.has(r)?"checked":""} />
+            <span class="badge badge-sm badge-soft badge-${k[r]}">${x(r)}</span>
+          </label>`).join("");e.innerHTML+=`
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Estado</span>
+            <div class="flex items-center gap-1.5 flex-wrap">${s}</div>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Quitar filtro de estado" title="Quitar filtro de estado">${u("close",14)}</button>
+          </div>`}l.has("keyword")&&(e.innerHTML+=`
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Palabra clave</span>
+            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="buscar título, resumen" value="${y(i.q)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Quitar filtro de palabra clave" title="Quitar filtro de palabra clave">${u("close",14)}</button>
+          </div>`),q(),_()}function q(){p("[data-add-filter]").forEach(e=>{const t=e.dataset.addFilter??"",s=e.closest("li");s&&(l.has(t)?s.classList.add("hidden"):s.classList.remove("hidden"))})}function _(){p("[data-remove-filter]").forEach(t=>{t.addEventListener("click",()=>{const s=t.dataset.removeFilter??"";l.delete(s),s==="status"&&(i.statuses=[]),s==="keyword"&&(i.q=""),w(),d()})}),p("[data-status]").forEach(t=>{t.addEventListener("change",()=>{i.statuses=p("[data-status]:checked").map(s=>s.dataset.status??"").filter(Boolean),d()})});const e=n("filter-q");e&&e.addEventListener("input",()=>{i.q=e.value,clearTimeout(e._t),e._t=setTimeout(d,300)})}p("[data-add-filter]").forEach(e=>{e.addEventListener("click",()=>{const t=e.dataset.addFilter??"";if(l.has(t))return;l.add(t);const s=e.closest("details");s&&(s.open=!1),w(),d()})});w();d();

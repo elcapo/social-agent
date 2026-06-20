@@ -1,45 +1,55 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Nav from "../components/Nav.astro";
+import Icon from "../components/Icon.astro";
 ---
 
-<Layout title="Drafts">
+<Layout title="Borradores">
   <Nav />
-  <main class="max-w-6xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">Drafts</h1>
-      <div class="flex gap-2">
-        <button class="btn btn-outline" id="btn-run-scheduler">Run scheduler</button>
-        <button class="btn btn-primary" id="btn-generate">Generate from idea</button>
+  <main id="main" class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6 gap-2 flex-wrap">
+      <h1 class="text-2xl font-bold">Borradores</h1>
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline gap-1.5" id="btn-run-scheduler" title="Publica los borradores programados cuya fecha ya ha llegado">
+          <Icon name="play" size={14} /> Ejecutar planificador
+        </button>
+        <button class="btn btn-primary gap-1.5" id="btn-generate">
+          <Icon name="sparkles" size={16} /> Generar desde idea
+        </button>
       </div>
     </div>
 
-    <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
+    <div id="error-msg" class="alert mb-4 hidden"></div>
 
     <div id="filters-bar" class="flex items-center gap-2 flex-wrap mb-4">
       <details class="dropdown">
-        <summary class="btn btn-sm btn-outline">+ Add filter</summary>
-        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-44 p-2 shadow-sm">
-          <li><button data-add-filter="status">Status</button></li>
-          <li><button data-add-filter="platform">Platform</button></li>
-          <li><button data-add-filter="keyword">Keyword</button></li>
+        <summary class="btn btn-sm btn-outline gap-1.5">
+          <Icon name="sliders" size={14} /> Añadir filtro
+        </summary>
+        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-48 p-2 shadow-sm">
+          <li><button data-add-filter="status">Estado</button></li>
+          <li><button data-add-filter="platform">Plataforma</button></li>
+          <li><button data-add-filter="keyword">Palabra clave</button></li>
         </ul>
       </details>
       <div id="active-filters" class="flex items-center gap-2 flex-wrap"></div>
     </div>
 
-    <div id="drafts-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
+    <div id="drafts-list">
+      <span class="loading loading-spinner loading-sm"></span>
+      <span class="text-sm text-base-content/60">Cargando…</span>
+    </div>
   </main>
 
   <dialog id="generate-modal" class="modal">
     <div class="modal-box">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Generate Drafts</legend>
-        <label class="label">Idea</label>
+        <legend class="fieldset-legend text-xl font-bold">Generar borradores</legend>
+        <label class="label" for="idea-select">Idea</label>
         <select id="idea-select" class="select w-full">
-          <option value="">Loading ideas...</option>
+          <option value="">Cargando ideas…</option>
         </select>
-        <label class="label">Platforms</label>
+        <label class="label">Plataformas</label>
         <label class="label cursor-pointer justify-start gap-3">
           <input type="checkbox" value="twitter" checked class="checkbox checkbox-primary" />
           <span class="label-text">Twitter / X</span>
@@ -50,8 +60,8 @@ import Nav from "../components/Nav.astro";
         </label>
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="modal-cancel">Cancel</button>
-        <button class="btn btn-primary" id="modal-generate">Generate</button>
+        <button class="btn" id="modal-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="modal-generate">Generar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -59,10 +69,10 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="confirm-dialog" class="modal">
     <div class="modal-box">
-      <p class="py-2" id="confirm-msg">Are you sure?</p>
+      <p class="py-2" id="confirm-msg">¿Seguro?</p>
       <div class="modal-action">
-        <button class="btn" id="confirm-no">Cancel</button>
-        <button class="btn btn-primary" id="confirm-yes">Confirm</button>
+        <button class="btn" id="confirm-no">Cancelar</button>
+        <button class="btn btn-primary" id="confirm-yes">Confirmar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -71,28 +81,46 @@ import Nav from "../components/Nav.astro";
   <dialog id="prompt-dialog" class="modal">
     <div class="modal-box">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold" id="prompt-msg">Reason:</legend>
+        <legend class="fieldset-legend text-xl font-bold" id="prompt-msg">Motivo:</legend>
         <input type="text" id="prompt-input" class="input w-full" />
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="prompt-cancel">Cancel</button>
-        <button class="btn btn-primary" id="prompt-ok">OK</button>
+        <button class="btn" id="prompt-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="prompt-ok">Aceptar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
   <script>
+    import { icon } from "~/scripts/icons";
+    import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import type { Draft, Idea, SchedulerResult } from "~/scripts/types";
+
     const API = "http://localhost:8000/api";
 
-    const errorEl = document.getElementById("error-msg");
+    const errorEl = byId("error-msg");
 
     const ALL_STATUSES = ["draft", "approved", "rejected", "published", "failed"];
-    const STATUS_LABELS = { draft: "warning", approved: "info", rejected: "error", published: "success", failed: "error" };
+    const STATUS_LABELS: Record<string, string> = {
+      draft: "warning",
+      approved: "info",
+      rejected: "error",
+      published: "success",
+      failed: "error",
+    };
+    const STATUS_ES: Record<string, string> = {
+      draft: "borrador",
+      approved: "aprobado",
+      rejected: "rechazado",
+      published: "publicado",
+      failed: "fallido",
+    };
+    const statusLabel = (s: string) => STATUS_ES[s] || s;
     const ALL_PLATFORMS = ["twitter", "linkedin"];
 
-    const filters = { statuses: [], platforms: [], q: "" };
-    const activeTypes = new Set();
+    const filters = { statuses: [] as string[], platforms: [] as string[], q: "" };
+    const activeTypes = new Set<string>();
 
     const urlParams = new URLSearchParams(window.location.search);
     const seedStatus = urlParams.get("status");
@@ -101,14 +129,14 @@ import Nav from "../components/Nav.astro";
       activeTypes.add("status");
     }
 
-    function showError(msg) {
+    function showError(msg: string) {
       errorEl.textContent = msg;
       errorEl.classList.remove("alert-info");
       errorEl.classList.add("alert-error");
       errorEl.classList.remove("hidden");
     }
 
-    function showInfo(msg) {
+    function showInfo(msg: string) {
       errorEl.textContent = msg;
       errorEl.classList.remove("alert-error");
       errorEl.classList.add("alert-info");
@@ -119,199 +147,283 @@ import Nav from "../components/Nav.astro";
       errorEl.classList.add("hidden");
     }
 
-    async function getErrorMsg(res) {
-      try {
-        const body = await res.json();
-        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
-        return body.detail || "Request failed";
-      } catch { return "Request failed"; }
-    }
-
-    function esc(str) {
-      if (!str) return "";
-      const d = document.createElement("div");
-      d.appendChild(document.createTextNode(str));
-      return d.innerHTML;
-    }
-
-    function askConfirm(msg) {
-      return new Promise(resolve => {
-        const dialog = document.getElementById("confirm-dialog");
-        document.getElementById("confirm-msg").textContent = msg;
+    function askConfirm(msg: string) {
+      return new Promise<boolean>((resolve) => {
+        const dialog = byId<HTMLDialogElement>("confirm-dialog");
+        byId("confirm-msg").textContent = msg;
         dialog.showModal();
-        document.getElementById("confirm-yes").onclick = () => { dialog.close(); resolve(true); };
-        document.getElementById("confirm-no").onclick = () => { dialog.close(); resolve(false); };
+        setTimeout(() => byId<HTMLButtonElement>("confirm-yes").focus(), 0);
+        byId<HTMLButtonElement>("confirm-yes").onclick = () => {
+          dialog.close();
+          resolve(true);
+        };
+        byId<HTMLButtonElement>("confirm-no").onclick = () => {
+          dialog.close();
+          resolve(false);
+        };
       });
     }
 
-    function askPrompt(msg) {
-      return new Promise(resolve => {
-        const dialog = document.getElementById("prompt-dialog");
-        document.getElementById("prompt-msg").textContent = msg;
-        const input = document.getElementById("prompt-input");
+    function askPrompt(msg: string) {
+      return new Promise<string | null>((resolve) => {
+        const dialog = byId<HTMLDialogElement>("prompt-dialog");
+        byId("prompt-msg").textContent = msg;
+        const input = byId<HTMLInputElement>("prompt-input");
         input.value = "";
         dialog.showModal();
-        input.focus();
-        document.getElementById("prompt-ok").onclick = () => { dialog.close(); resolve(input.value); };
-        document.getElementById("prompt-cancel").onclick = () => { dialog.close(); resolve(null); };
+        setTimeout(() => input.focus(), 0);
+        byId<HTMLButtonElement>("prompt-ok").onclick = () => {
+          dialog.close();
+          resolve(input.value);
+        };
+        byId<HTMLButtonElement>("prompt-cancel").onclick = () => {
+          dialog.close();
+          resolve(null);
+        };
       });
+    }
+
+    function statusBadge(d: Draft) {
+      const colors: Record<string, string> = {
+        draft: "badge-warning",
+        approved: "badge-info",
+        rejected: "badge-error",
+        published: "badge-success",
+        failed: "badge-error",
+      };
+      return `<span class="badge badge-sm badge-soft ${colors[d.status] || "badge-ghost"}" title="Estado ${statusLabel(d.status)}">${statusLabel(d.status)}</span>`;
+    }
+
+    function mediaCell(d: Draft) {
+      const urls = d.media_urls || [];
+      const paths = d.media_paths || [];
+      const all = [
+        ...urls.map((u) => ({ src: u })),
+        ...paths.map((p) => ({ src: `${API}/media/${p.split("/").pop()}` })),
+      ];
+      if (!all.length) return '<span class="text-base-content/30">—</span>';
+      return `<div class="flex gap-1">${all
+        .slice(0, 3)
+        .map(
+          (m) =>
+            `<img src="${esc(m.src)}" class="w-8 h-8 object-cover rounded" alt="Vista previa del medio" loading="lazy" />`
+        )
+        .join("")}${all.length > 3 ? `<span class="text-xs text-base-content/60 self-center">+${all.length - 3}</span>` : ""}</div>`;
+    }
+
+    function scheduledCell(d: Draft) {
+      return d.scheduled_at
+        ? `<span class="badge badge-sm badge-soft badge-secondary whitespace-nowrap" title="${esc(d.scheduled_at)}">${icon("calendar", 12, "inline-block")} ${new Date(d.scheduled_at).toLocaleString()}</span>`
+        : '<span class="text-base-content/30">—</span>';
+    }
+
+    function draftActions(d: Draft) {
+      const parts: string[] = [
+        `<a href="/drafts/edit?id=${d.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar borrador" title="Editar borrador">${icon("edit", 16)}</a>`,
+      ];
+      if (d.status === "draft") {
+        parts.push(
+          `<button class="btn btn-square btn-ghost btn-sm text-success" data-action="approve" data-id="${d.id}" aria-label="Aprobar borrador" title="Aprobar borrador">${icon("check", 16)}</button>`
+        );
+        parts.push(
+          `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="reject" data-id="${d.id}" aria-label="Rechazar borrador" title="Rechazar (pedir motivo)">${icon("circle-x", 16)}</button>`
+        );
+      }
+      if (d.status === "approved") {
+        parts.push(
+          `<button class="btn btn-square btn-ghost btn-sm text-primary" data-action="publish" data-id="${d.id}" aria-label="Publicar borrador" title="Publicar borrador">${icon("send", 16)}</button>`
+        );
+      }
+      if (d.scheduled_at) {
+        parts.push(
+          `<button class="btn btn-square btn-ghost btn-sm" data-action="unschedule" data-id="${d.id}" aria-label="Cancelar programación" title="Cancelar programación">${icon("calendar-x", 16)}</button>`
+        );
+      }
+      return parts.join("");
     }
 
     async function load() {
       hideError();
-      const urlParams = new URLSearchParams();
-      (filters.statuses || []).forEach(s => urlParams.append("statuses", s));
-      (filters.platforms || []).forEach(p => urlParams.append("platforms", p));
-      if (filters.q) urlParams.set("q", filters.q);
-      const qs = urlParams.toString();
+      const params = new URLSearchParams();
+      filters.statuses.forEach((s) => params.append("statuses", s));
+      filters.platforms.forEach((p) => params.append("platforms", p));
+      if (filters.q) params.set("q", filters.q);
+      const qs = params.toString();
       const res = await fetch(`${API}/drafts${qs ? "?" + qs : ""}`);
-      const drafts = await res.json();
-      const container = document.getElementById("drafts-list");
+      const drafts = (await res.json()) as Draft[];
+      const container = byId("drafts-list");
 
       if (!drafts.length) {
-        container.innerHTML = '<div class="alert bg-base-200 text-sm">No drafts yet. Click "Generate from seed" to create some.</div>';
+        container.innerHTML =
+          '<div class="alert bg-base-200 text-sm">Aún no hay borradores. Pulsa "Generar desde idea" para crear algunos.</div>';
         return;
       }
 
-      container.innerHTML = `<div class="overflow-x-auto"><table class="table table-zinc">
-        <thead>
+      const rows = drafts
+        .map(
+          (d) => `
           <tr>
-            <th>Platform</th>
-            <th>Content</th>
-            <th>Media</th>
-            <th>Status</th>
-            <th>Scheduled</th>
-            <th>Created</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>${drafts.map(d => `
-          <tr>
-            <td><span class="font-semibold text-xs uppercase tracking-wider">${esc(d.platform)}</span></td>
-            <td><div class="text-sm text-base-content/60 max-w-xs truncate">${d.content ? esc(d.content.substring(0, 100)) + (d.content.length > 100 ? "…" : "") : "—"}</div></td>
-            <td>${(() => {
-              const urls = d.media_urls || [];
-              const paths = d.media_paths || [];
-              const allMedia = [...urls.map(u => ({ type: "url", src: u })), ...paths.map(p => ({ type: "path", src: `${API}/media/${p.split("/").pop()}` }))];
-              if (!allMedia.length) return '<span class="text-base-content/20">—</span>';
-              return `<div class="flex gap-1">${allMedia.slice(0, 3).map(m => `<img src="${esc(m.src)}" class="w-8 h-8 object-cover rounded" alt="" />`).join("")}${allMedia.length > 3 ? `<span class="text-xs text-base-content/40">+${allMedia.length - 3}</span>` : ""}</div>`;
-            })()}</td>
-            <td><span class="badge badge-sm badge-soft ${d.status === "draft" ? "badge-warning" : d.status === "approved" ? "badge-info" : d.status === "published" ? "badge-success" : "badge-error"}">${d.status}</span></td>
-            <td>${d.scheduled_at
-              ? `<span class="badge badge-sm badge-soft badge-secondary whitespace-nowrap" title="${esc(d.scheduled_at)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${new Date(d.scheduled_at).toLocaleString()}</span>`
-              : '<span class="text-base-content/20">—</span>'}</td>
-            <td class="text-sm text-base-content/40">${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</td>
-            <td><div class="flex gap-1"><a href="/drafts/edit?id=${d.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit draft"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a>${d.status === "draft"
-              ? `<button class="btn btn-ghost btn-xs text-success" data-action="approve" data-id="${d.id}" aria-label="Approve draft">Approve</button><button class="btn btn-ghost btn-xs text-error" data-action="reject" data-id="${d.id}" aria-label="Reject draft">Reject</button>`
-              : d.status === "approved"
-              ? `<button class="btn btn-ghost btn-xs text-primary" data-action="publish" data-id="${d.id}" aria-label="Publish draft">Publish</button>`
-              : ""}${d.scheduled_at
-              ? `<button class="btn btn-ghost btn-xs" data-action="unschedule" data-id="${d.id}" aria-label="Cancel schedule">Cancel schedule</button>`
-              : ""}</div></td>
-          </tr>`).join("")}</tbody>
-      </table></div>`;
+            <td><span class="badge badge-sm badge-ghost capitalize">${esc(d.platform)}</span></td>
+            <td><div class="text-sm text-base-content/70 max-w-xs truncate" title="${esc(d.content || "")}">${d.content ? esc(d.content.substring(0, 100)) + (d.content.length > 100 ? "…" : "") : "—"}</div></td>
+            <td>${mediaCell(d)}</td>
+            <td>${statusBadge(d)}</td>
+            <td>${scheduledCell(d)}</td>
+            <td class="text-sm text-base-content/60">${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</td>
+            <td><div class="flex gap-1">${draftActions(d)}</div></td>
+          </tr>`
+        )
+        .join("");
+
+      const cards = drafts
+        .map(
+          (d) => `
+          <div class="card bg-base-100 border border-base-300 shadow-sm">
+            <div class="card-body p-4 gap-2">
+              <div class="flex items-center justify-between gap-2">
+                <span class="badge badge-sm badge-ghost capitalize">${esc(d.platform)}</span>
+                ${statusBadge(d)}
+              </div>
+              <p class="text-sm text-base-content/80 line-clamp-3">${d.content ? esc(d.content.substring(0, 200)) + (d.content.length > 200 ? "…" : "") : "—"}</p>
+              ${mediaCell(d)}
+              <div class="flex items-center justify-between gap-2 text-xs text-base-content/60 flex-wrap">
+                <span>${scheduledCell(d)}</span>
+                <span>${d.created_at ? new Date(d.created_at).toLocaleDateString() : "—"}</span>
+              </div>
+              <div class="flex gap-1 pt-1 border-t border-base-200">${draftActions(d)}</div>
+            </div>
+          </div>`
+        )
+        .join("");
+
+      container.innerHTML = `
+        <div class="hidden md:block overflow-x-auto">
+          <table class="table table-zinc">
+            <thead>
+              <tr>
+                <th>Plataforma</th>
+                <th>Contenido</th>
+                <th>Multimedia</th>
+                <th>Estado</th>
+                <th>Programado</th>
+                <th>Creado</th>
+                <th><span class="sr-only">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div class="md:hidden flex flex-col gap-3">${cards}</div>`;
     }
 
-    document.getElementById("drafts-list").addEventListener("click", async (e) => {
-      const btn = e.target.closest("[data-action]");
+    byId("drafts-list").addEventListener("click", async (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
       if (!btn) return;
       hideError();
+      const id = btn.dataset.id ?? "";
 
       try {
         switch (btn.dataset.action) {
           case "approve": {
-            const res = await fetch(`${API}/drafts/${btn.dataset.id}`, {
+            const res = await fetch(`${API}/drafts/${id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ status: "approved" }),
             });
-            if (!res.ok) throw new Error(await getErrorMsg(res));
+            if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
           }
           case "reject": {
-            const notes = await askPrompt("Reason for rejection (optional):");
+            const notes = await askPrompt("Motivo del rechazo (opcional):");
             if (notes === null) return;
-            const res = await fetch(`${API}/drafts/${btn.dataset.id}`, {
+            const res = await fetch(`${API}/drafts/${id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ status: "rejected", notes }),
             });
-            if (!res.ok) throw new Error(await getErrorMsg(res));
+            if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
           }
           case "publish": {
-            const ok = await askConfirm("Publish this draft?");
+            const ok = await askConfirm("¿Publicar este borrador?");
             if (!ok) return;
-            const res = await fetch(`${API}/publish/${btn.dataset.id}`, { method: "POST" });
-            if (!res.ok) throw new Error(await getErrorMsg(res));
+            const res = await fetch(`${API}/publish/${id}`, { method: "POST" });
+            if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
           }
           case "unschedule": {
-            const ok = await askConfirm("Cancel the schedule for this draft?");
+            const ok = await askConfirm("¿Cancelar la programación de este borrador?");
             if (!ok) return;
-            const res = await fetch(`${API}/drafts/${btn.dataset.id}/unschedule`, { method: "POST" });
-            if (!res.ok) throw new Error(await getErrorMsg(res));
+            const res = await fetch(`${API}/drafts/${id}/unschedule`, { method: "POST" });
+            if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
           }
         }
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       }
     });
 
-    document.getElementById("btn-run-scheduler").addEventListener("click", async () => {
+    byId("btn-run-scheduler").addEventListener("click", async () => {
       hideError();
-      const btn = document.getElementById("btn-run-scheduler");
+      const btn = byId<HTMLButtonElement>("btn-run-scheduler");
       btn.disabled = true;
-      btn.textContent = "Running...";
+      btn.textContent = "Ejecutando…";
       try {
         const res = await fetch(`${API}/scheduler/run`, { method: "POST" });
-        if (!res.ok) throw new Error(await getErrorMsg(res));
-        const data = await res.json();
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        const data = (await res.json()) as SchedulerResult;
         if (data.published === 0 && data.failed === 0) {
-          showInfo("No drafts due for publishing.");
+          showInfo("No hay borradores listos para publicar.");
         } else {
-          showInfo(`Scheduler: ${data.published} published, ${data.failed} failed.`);
+          showInfo(`Planificador: ${data.published} publicados, ${data.failed} fallidos.`);
         }
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Run scheduler";
+        btn.innerHTML = `${icon("play", 14)} Ejecutar planificador`;
       }
     });
 
-    document.getElementById("btn-generate").addEventListener("click", async () => {
+    byId("btn-generate").addEventListener("click", async () => {
       hideError();
-      const modal = document.getElementById("generate-modal");
-      const select = document.getElementById("idea-select");
+      const modal = byId<HTMLDialogElement>("generate-modal");
+      const select = byId<HTMLSelectElement>("idea-select");
 
       const res = await fetch(`${API}/ideas?status=pending`);
-      const ideas = await res.json();
+      const ideas = (await res.json()) as Idea[];
       select.innerHTML = ideas.length
-        ? ideas.map(i => `<option value="${i.id}">${esc(i.title)}</option>`).join("")
-        : '<option value="">No pending ideas available</option>';
+        ? ideas.map((i) => `<option value="${i.id}">${esc(i.title)}</option>`).join("")
+        : '<option value="">No hay ideas pendientes</option>';
 
       modal.showModal();
+      setTimeout(() => select.focus(), 0);
     });
 
-    document.getElementById("modal-cancel").addEventListener("click", () => {
-      document.getElementById("generate-modal").close();
+    byId("modal-cancel").addEventListener("click", () => {
+      byId<HTMLDialogElement>("generate-modal").close();
     });
 
-    document.getElementById("modal-generate").addEventListener("click", async () => {
-      const ideaId = document.getElementById("idea-select").value;
-      if (!ideaId) { showError("Select an idea first."); return; }
+    byId("modal-generate").addEventListener("click", async () => {
+      const ideaId = byId<HTMLSelectElement>("idea-select").value;
+      if (!ideaId) {
+        showError("Selecciona una idea.");
+        return;
+      }
 
-      const checkboxes = document.querySelectorAll("#generate-modal input[type=checkbox]:checked");
-      const platforms = Array.from(checkboxes).map(cb => cb.value);
-      if (!platforms.length) { showError("Select at least one platform."); return; }
+      const platforms = qAll<HTMLInputElement>("#generate-modal input[type=checkbox]:checked").map(
+        (cb) => cb.value
+      );
+      if (!platforms.length) {
+        showError("Selecciona al menos una plataforma.");
+        return;
+      }
 
-      const btn = document.getElementById("modal-generate");
+      const btn = byId<HTMLButtonElement>("modal-generate");
       btn.disabled = true;
-      btn.textContent = "Generating...";
+      btn.textContent = "Generando…";
       hideError();
 
       try {
@@ -320,63 +432,63 @@ import Nav from "../components/Nav.astro";
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ idea_id: ideaId, platforms }),
         });
-        if (!res.ok) throw new Error(await getErrorMsg(res));
-        document.getElementById("generate-modal").close();
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        byId<HTMLDialogElement>("generate-modal").close();
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Generate";
+        btn.textContent = "Generar";
       }
     });
 
-    // ── Filters ──
-
-    function escAttr(str) {
-      return esc(str).replace(/"/g, "&quot;");
-    }
+    // ── Filtros ──
 
     function renderFilters() {
-      const container = document.getElementById("active-filters");
+      const container = byId("active-filters");
       container.innerHTML = "";
 
       if (activeTypes.has("status")) {
         const checked = new Set(filters.statuses);
-        const checkboxes = ALL_STATUSES.map(st => `
+        const checkboxes = ALL_STATUSES.map(
+          (st) => `
           <label class="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" class="checkbox checkbox-xs" data-status="${st}" ${checked.has(st) ? "checked" : ""} />
-            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${st}</span>
-          </label>`).join("");
+            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${statusLabel(st)}</span>
+          </label>`
+        ).join("");
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Status</span>
+            <span class="text-xs font-medium text-base-content/60">Estado</span>
             <div class="flex items-center gap-1.5 flex-wrap">${checkboxes}</div>
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Remove status filter">✕</button>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Quitar filtro de estado" title="Quitar filtro de estado">${icon("close", 14)}</button>
           </div>`;
       }
 
       if (activeTypes.has("platform")) {
         const checked = new Set(filters.platforms);
-        const checkboxes = ALL_PLATFORMS.map(p => `
+        const checkboxes = ALL_PLATFORMS.map(
+          (p) => `
           <label class="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" class="checkbox checkbox-xs" data-platform="${p}" ${checked.has(p) ? "checked" : ""} />
-            <span class="badge badge-sm badge-soft">${p}</span>
-          </label>`).join("");
+            <span class="badge badge-sm badge-soft capitalize">${p}</span>
+          </label>`
+        ).join("");
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Platform</span>
+            <span class="text-xs font-medium text-base-content/60">Plataforma</span>
             <div class="flex items-center gap-1.5 flex-wrap">${checkboxes}</div>
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="platform" aria-label="Remove platform filter">✕</button>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="platform" aria-label="Quitar filtro de plataforma" title="Quitar filtro de plataforma">${icon("close", 14)}</button>
           </div>`;
       }
 
       if (activeTypes.has("keyword")) {
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Keyword</span>
-            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="search content" value="${escAttr(filters.q)}" />
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Remove keyword filter">✕</button>
+            <span class="text-xs font-medium text-base-content/60">Palabra clave</span>
+            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="buscar contenido" value="${escAttr(filters.q)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Quitar filtro de palabra clave" title="Quitar filtro de palabra clave">${icon("close", 14)}</button>
           </div>`;
       }
 
@@ -385,9 +497,10 @@ import Nav from "../components/Nav.astro";
     }
 
     function updateAddFilterMenu() {
-      document.querySelectorAll("[data-add-filter]").forEach(btn => {
-        const type = btn.dataset.addFilter;
+      qAll<HTMLButtonElement>("[data-add-filter]").forEach((btn) => {
+        const type = btn.dataset.addFilter ?? "";
         const li = btn.closest("li");
+        if (!li) return;
         if (activeTypes.has(type)) {
           li.classList.add("hidden");
         } else {
@@ -397,9 +510,9 @@ import Nav from "../components/Nav.astro";
     }
 
     function bindFilterEvents() {
-      document.querySelectorAll("[data-remove-filter]").forEach(btn => {
+      qAll<HTMLButtonElement>("[data-remove-filter]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const type = btn.dataset.removeFilter;
+          const type = btn.dataset.removeFilter ?? "";
           activeTypes.delete(type);
           if (type === "status") filters.statuses = [];
           if (type === "platform") filters.platforms = [];
@@ -409,21 +522,25 @@ import Nav from "../components/Nav.astro";
         });
       });
 
-      document.querySelectorAll("[data-status]").forEach(cb => {
+      qAll<HTMLInputElement>("[data-status]").forEach((cb) => {
         cb.addEventListener("change", () => {
-          filters.statuses = Array.from(document.querySelectorAll("[data-status]:checked")).map(el => el.dataset.status);
+          filters.statuses = qAll<HTMLInputElement>("[data-status]:checked")
+            .map((el) => el.dataset.status ?? "")
+            .filter(Boolean);
           load();
         });
       });
 
-      document.querySelectorAll("[data-platform]").forEach(cb => {
+      qAll<HTMLInputElement>("[data-platform]").forEach((cb) => {
         cb.addEventListener("change", () => {
-          filters.platforms = Array.from(document.querySelectorAll("[data-platform]:checked")).map(el => el.dataset.platform);
+          filters.platforms = qAll<HTMLInputElement>("[data-platform]:checked")
+            .map((el) => el.dataset.platform ?? "")
+            .filter(Boolean);
           load();
         });
       });
 
-      const qInput = document.getElementById("filter-q");
+      const qInput = byId<HTMLInputElement>("filter-q");
       if (qInput) {
         qInput.addEventListener("input", () => {
           filters.q = qInput.value;
@@ -433,9 +550,9 @@ import Nav from "../components/Nav.astro";
       }
     }
 
-    document.querySelectorAll("[data-add-filter]").forEach(btn => {
+    qAll<HTMLButtonElement>("[data-add-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const type = btn.dataset.addFilter;
+        const type = btn.dataset.addFilter ?? "";
         if (activeTypes.has(type)) return;
         activeTypes.add(type);
         const dropdown = btn.closest("details");

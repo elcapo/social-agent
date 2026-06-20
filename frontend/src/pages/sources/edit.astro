@@ -1,15 +1,18 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import Nav from "../../components/Nav.astro";
+import Icon from "../../components/Icon.astro";
 ---
 
-<Layout title="Edit Source">
+<Layout title="Editar fuente">
   <Nav />
-  <main class="max-w-3xl mx-auto px-4 py-8">
+  <main id="main" class="max-w-3xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6">
       <div>
-        <a href="/sources" class="link link-hover text-sm text-base-content/50">&larr; Back to sources</a>
-        <h1 class="text-2xl font-bold mt-1" id="page-title">Edit Source</h1>
+        <a href="/sources" class="link link-hover text-sm text-base-content/60 inline-flex items-center gap-1 no-underline">
+          <Icon name="arrow-left" size={14} /> Volver a fuentes
+        </a>
+        <h1 class="text-2xl font-bold mt-1" id="page-title">Editar fuente</h1>
       </div>
     </div>
 
@@ -18,74 +21,79 @@ import Nav from "../../components/Nav.astro";
 
     <div id="loading" class="flex items-center gap-2 py-8">
       <span class="loading loading-spinner loading-sm"></span>
-      <span class="text-sm text-base-content/40">Loading source...</span>
+      <span class="text-sm text-base-content/60">Cargando fuente…</span>
     </div>
 
     <div id="form-container" class="hidden">
       <fieldset class="fieldset bg-base-100 border border-base-300 rounded-box p-6">
-        <legend class="fieldset-legend text-xl font-bold">Source details</legend>
+        <legend class="fieldset-legend text-xl font-bold">Detalles de la fuente</legend>
 
-        <label class="label">Name</label>
-        <input type="text" id="src-name" class="input w-full" placeholder="My RSS feed" />
+        <label class="label" for="src-name">Nombre</label>
+        <input type="text" id="src-name" class="input w-full" placeholder="Mi feed RSS" />
 
-        <label class="label">Type</label>
+        <label class="label" for="src-type">Tipo</label>
         <select id="src-type" class="select w-full">
           <option value="rss">RSS</option>
-          <option value="webpage">Webpage</option>
-          <option value="link_scraper">Link Scraper</option>
+          <option value="webpage">Página web</option>
+          <option value="link_scraper">Scraper de enlaces</option>
           <option value="social">Social</option>
           <option value="manual">Manual</option>
         </select>
 
-        <label class="label">URL</label>
-        <input type="url" id="src-url" class="input w-full" placeholder="https://..." />
+        <label class="label" for="src-url">URL</label>
+        <input type="url" id="src-url" class="input w-full" placeholder="https://…" />
 
-        <label class="label">Priority</label>
+        <label class="label" for="src-priority">Prioridad</label>
         <select id="src-priority" class="select w-full">
-          <option value="1">High (1)</option>
-          <option value="2" selected>Medium (2)</option>
-          <option value="3">Low (3)</option>
+          <option value="1">Alta (1)</option>
+          <option value="2" selected>Media (2)</option>
+          <option value="3">Baja (3)</option>
         </select>
 
-        <label class="label">Tags (comma-separated)</label>
+        <label class="label" for="src-tags">Etiquetas (separadas por comas)</label>
         <input type="text" id="src-tags" class="input w-full" placeholder="tech, python" />
         <div id="config-field">
-          <label class="label">Config (JSON)</label>
+          <label class="label" for="src-config">Configuración (JSON)</label>
           <textarea id="src-config" class="textarea w-full font-mono text-sm" rows="3" placeholder='{"url_pattern": "/blog/.+", "max_items": 10}'></textarea>
         </div>
       </fieldset>
 
       <div class="flex gap-3 mt-6">
-        <a href="/sources" class="btn">Cancel</a>
-        <button class="btn btn-primary" id="btn-save">Save changes</button>
+        <a href="/sources" class="btn">Cancelar</a>
+        <button class="btn btn-primary" id="btn-save">Guardar cambios</button>
       </div>
     </div>
 
     <div id="not-found" class="hidden">
-      <div class="alert alert-error">Source not found.</div>
-      <a href="/sources" class="btn btn-ghost mt-4">&larr; Back to sources</a>
+      <div class="alert alert-error">Fuente no encontrada.</div>
+      <a href="/sources" class="btn btn-ghost mt-4 gap-1.5">
+        <Icon name="arrow-left" size={16} /> Volver a fuentes
+      </a>
     </div>
   </main>
 
   <script>
+    import { byId, getErrorMessage } from "~/scripts/dom";
+    import type { Source } from "~/scripts/types";
+
     const API = "http://localhost:8000/api";
 
     const params = new URLSearchParams(window.location.search);
     const sourceId = params.get("id");
 
-    const errorEl = document.getElementById("error-msg");
-    const successEl = document.getElementById("success-msg");
-    const loadingEl = document.getElementById("loading");
-    const formContainer = document.getElementById("form-container");
-    const notFoundEl = document.getElementById("not-found");
+    const errorEl = byId("error-msg");
+    const successEl = byId("success-msg");
+    const loadingEl = byId("loading");
+    const formContainer = byId("form-container");
+    const notFoundEl = byId("not-found");
 
-    function showError(msg) {
+    function showError(msg: string) {
       successEl.classList.add("hidden");
       errorEl.textContent = msg;
       errorEl.classList.remove("hidden");
     }
 
-    function showSuccess(msg) {
+    function showSuccess(msg: string) {
       errorEl.classList.add("hidden");
       successEl.textContent = msg;
       successEl.classList.remove("hidden");
@@ -94,14 +102,6 @@ import Nav from "../../components/Nav.astro";
     function hideAll() {
       errorEl.classList.add("hidden");
       successEl.classList.add("hidden");
-    }
-
-    async function getErrorMessage(res) {
-      try {
-        const body = await res.json();
-        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
-        return body.detail || "Request failed";
-      } catch { return "Request failed"; }
     }
 
     async function load() {
@@ -118,66 +118,85 @@ import Nav from "../../components/Nav.astro";
         return;
       }
 
-      const source = await res.json();
+      const source = (await res.json()) as Source;
       loadingEl.classList.add("hidden");
       formContainer.classList.remove("hidden");
 
-      document.getElementById("page-title").textContent = `Edit: ${source.name}`;
-      document.getElementById("src-name").value = source.name;
-      document.getElementById("src-type").value = source.source_type;
-      document.getElementById("src-url").value = source.url;
-      document.getElementById("src-priority").value = String(source.priority);
-      document.getElementById("src-tags").value = (source.tags || []).join(", ");
+      byId("page-title").textContent = `Editar: ${source.name}`;
+      byId<HTMLInputElement>("src-name").value = source.name;
+      byId<HTMLSelectElement>("src-type").value = source.source_type;
+      byId<HTMLInputElement>("src-url").value = source.url;
+      byId<HTMLSelectElement>("src-priority").value = String(source.priority);
+      byId<HTMLInputElement>("src-tags").value = (source.tags || []).join(", ");
       const configVal = source.config ? JSON.stringify(source.config, null, 2) : "";
-      document.getElementById("src-config").value = configVal;
+      byId<HTMLTextAreaElement>("src-config").value = configVal;
       updateConfigPlaceholder();
+      setTimeout(() => byId<HTMLInputElement>("src-name").focus(), 0);
     }
 
     function updateConfigPlaceholder() {
-      const type = document.getElementById("src-type").value;
-      const placeholder = type === "rss"
-        ? '{"full_content": true}'
-        : type === "link_scraper"
-          ? '{"url_pattern": "/blog/.+", "max_items": 10}'
-          : '{"key": "value"}';
-      document.getElementById("src-config").placeholder = placeholder;
+      const type = byId<HTMLSelectElement>("src-type").value;
+      const placeholder =
+        type === "rss"
+          ? '{"full_content": true}'
+          : type === "link_scraper"
+            ? '{"url_pattern": "/blog/.+", "max_items": 10}'
+            : '{"key": "value"}';
+      byId<HTMLTextAreaElement>("src-config").placeholder = placeholder;
     }
 
-    document.getElementById("src-type").addEventListener("change", updateConfigPlaceholder);
+    byId<HTMLSelectElement>("src-type").addEventListener("change", updateConfigPlaceholder);
 
-    document.getElementById("btn-save").addEventListener("click", async () => {
-      const name = document.getElementById("src-name").value.trim();
-      const sourceType = document.getElementById("src-type").value;
-      const url = document.getElementById("src-url").value.trim();
-      const priority = parseInt(document.getElementById("src-priority").value);
-      const tagsStr = document.getElementById("src-tags").value.trim();
+    byId("btn-save").addEventListener("click", async () => {
+      const name = byId<HTMLInputElement>("src-name").value.trim();
+      const sourceType = byId<HTMLSelectElement>("src-type").value;
+      const url = byId<HTMLInputElement>("src-url").value.trim();
+      const priority = parseInt(byId<HTMLSelectElement>("src-priority").value);
+      const tagsStr = byId<HTMLInputElement>("src-tags").value.trim();
 
-      if (!name || !url) { showError("Name and URL are required."); return; }
+      if (!name || !url) {
+        showError("El nombre y la URL son obligatorios.");
+        return;
+      }
 
-      const btn = document.getElementById("btn-save");
+      const btn = byId<HTMLButtonElement>("btn-save");
       btn.disabled = true;
-      btn.textContent = "Saving...";
+      btn.textContent = "Guardando…";
       hideAll();
 
       try {
-        const tagList = tagsStr ? tagsStr.split(",").map(t => t.trim()) : [];
-        const params = new URLSearchParams({ name, source_type: sourceType, url, priority: String(priority) });
-        tagList.forEach(t => params.append("tags", t));
-        const configVal = document.getElementById("src-config").value.trim();
+        const tagList = tagsStr ? tagsStr.split(",").map((t) => t.trim()) : [];
+        const params = new URLSearchParams({
+          name,
+          source_type: sourceType,
+          url,
+          priority: String(priority),
+        });
+        tagList.forEach((t) => params.append("tags", t));
+        const configVal = byId<HTMLTextAreaElement>("src-config").value.trim();
         if (configVal) {
-          try { JSON.parse(configVal); params.append("config", configVal); }
-          catch { showError("Config is not valid JSON."); btn.disabled = false; btn.textContent = "Save changes"; return; }
+          try {
+            JSON.parse(configVal);
+            params.append("config", configVal);
+          } catch {
+            showError("La configuración no es JSON válido.");
+            btn.disabled = false;
+            btn.textContent = "Guardar cambios";
+            return;
+          }
         }
         const res = await fetch(`${API}/sources/${sourceId}?${params}`, { method: "PATCH" });
         if (!res.ok) throw new Error(await getErrorMessage(res));
 
-        showSuccess("Source updated successfully.");
-        btn.textContent = "Saved!";
-        setTimeout(() => { window.location.href = "/sources"; }, 1000);
+        showSuccess("Fuente actualizada correctamente.");
+        btn.textContent = "¡Guardado!";
+        setTimeout(() => {
+          window.location.href = "/sources";
+        }, 1000);
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
         btn.disabled = false;
-        btn.textContent = "Save changes";
+        btn.textContent = "Guardar cambios";
       }
     });
 

@@ -1,44 +1,52 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Nav from "../components/Nav.astro";
+import Icon from "../components/Icon.astro";
 ---
 
 <Layout title="Ideas">
   <Nav />
-  <main class="max-w-6xl mx-auto px-4 py-8">
-    <div class="flex items-center justify-between mb-6">
+  <main id="main" class="max-w-6xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6 gap-2 flex-wrap">
       <h1 class="text-2xl font-bold">Ideas</h1>
-      <button class="btn btn-primary" id="btn-generate">Generate idea</button>
+      <button class="btn btn-primary gap-1.5" id="btn-generate">
+        <Icon name="sparkles" size={16} /> Generar idea
+      </button>
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
 
     <div id="filters-bar" class="flex items-center gap-2 flex-wrap mb-4">
       <details class="dropdown">
-        <summary class="btn btn-sm btn-outline">+ Add filter</summary>
-        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-44 p-2 shadow-sm">
-          <li><button data-add-filter="status">Status</button></li>
-          <li><button data-add-filter="keyword">Keyword</button></li>
+        <summary class="btn btn-sm btn-outline gap-1.5">
+          <Icon name="sliders" size={14} /> Añadir filtro
+        </summary>
+        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-48 p-2 shadow-sm">
+          <li><button data-add-filter="status">Estado</button></li>
+          <li><button data-add-filter="keyword">Palabra clave</button></li>
         </ul>
       </details>
       <div id="active-filters" class="flex items-center gap-2 flex-wrap"></div>
     </div>
 
-    <div id="ideas-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
+    <div id="ideas-list">
+      <span class="loading loading-spinner loading-sm"></span>
+      <span class="text-sm text-base-content/60">Cargando…</span>
+    </div>
   </main>
 
   <dialog id="generate-modal" class="modal">
     <div class="modal-box">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Generate Idea</legend>
-        <label class="label">Seed</label>
+        <legend class="fieldset-legend text-xl font-bold">Generar idea</legend>
+        <label class="label" for="seed-select">Semilla</label>
         <select id="seed-select" class="select w-full">
-          <option value="">Loading seeds...</option>
+          <option value="">Cargando semillas…</option>
         </select>
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="modal-cancel">Cancel</button>
-        <button class="btn btn-primary" id="modal-generate">Generate</button>
+        <button class="btn" id="modal-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="modal-generate">Generar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -46,25 +54,39 @@ import Nav from "../components/Nav.astro";
 
   <dialog id="confirm-dialog" class="modal">
     <div class="modal-box">
-      <p class="py-2" id="confirm-msg">Are you sure?</p>
+      <p class="py-2" id="confirm-msg">¿Seguro?</p>
       <div class="modal-action">
-        <button class="btn" id="confirm-no">Cancel</button>
-        <button class="btn btn-primary" id="confirm-yes">Confirm</button>
+        <button class="btn" id="confirm-no">Cancelar</button>
+        <button class="btn btn-primary" id="confirm-yes">Confirmar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
   <script>
+    import { icon } from "~/scripts/icons";
+    import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import type { Idea, Seed } from "~/scripts/types";
+
     const API = "http://localhost:8000/api";
 
-    const errorEl = document.getElementById("error-msg");
+    const errorEl = byId("error-msg");
 
     const ALL_STATUSES = ["pending", "used", "discarded"];
-    const STATUS_LABELS = { pending: "warning", used: "success", discarded: "error" };
+    const STATUS_LABELS: Record<string, string> = {
+      pending: "warning",
+      used: "success",
+      discarded: "error",
+    };
+    const STATUS_ES: Record<string, string> = {
+      pending: "pendiente",
+      used: "usado",
+      discarded: "descartado",
+    };
+    const statusLabel = (s: string) => STATUS_ES[s] || s;
 
-    const filters = { statuses: [], q: "" };
-    const activeTypes = new Set();
+    const filters = { statuses: [] as string[], q: "" };
+    const activeTypes = new Set<string>();
 
     const urlParams = new URLSearchParams(window.location.search);
     const seedStatus = urlParams.get("status");
@@ -73,7 +95,7 @@ import Nav from "../components/Nav.astro";
       activeTypes.add("status");
     }
 
-    function showError(msg) {
+    function showError(msg: string) {
       errorEl.textContent = msg;
       errorEl.classList.remove("hidden");
     }
@@ -82,82 +104,86 @@ import Nav from "../components/Nav.astro";
       errorEl.classList.add("hidden");
     }
 
-    async function getErrorMsg(res) {
-      try {
-        const body = await res.json();
-        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
-        return body.detail || "Request failed";
-      } catch { return "Request failed"; }
-    }
-
-    function esc(str) {
-      if (!str) return "";
-      const d = document.createElement("div");
-      d.appendChild(document.createTextNode(str));
-      return d.innerHTML;
-    }
-
-    function askConfirm(msg) {
-      return new Promise(resolve => {
-        const dialog = document.getElementById("confirm-dialog");
-        document.getElementById("confirm-msg").textContent = msg;
+    function askConfirm(msg: string) {
+      return new Promise<boolean>((resolve) => {
+        const dialog = byId<HTMLDialogElement>("confirm-dialog");
+        byId("confirm-msg").textContent = msg;
         dialog.showModal();
-        document.getElementById("confirm-yes").onclick = () => { dialog.close(); resolve(true); };
-        document.getElementById("confirm-no").onclick = () => { dialog.close(); resolve(false); };
+        setTimeout(() => byId<HTMLButtonElement>("confirm-yes").focus(), 0);
+        byId<HTMLButtonElement>("confirm-yes").onclick = () => {
+          dialog.close();
+          resolve(true);
+        };
+        byId<HTMLButtonElement>("confirm-no").onclick = () => {
+          dialog.close();
+          resolve(false);
+        };
       });
     }
 
     async function load() {
       hideError();
-      const urlParams = new URLSearchParams();
-      (filters.statuses || []).forEach(s => urlParams.append("statuses", s));
-      if (filters.q) urlParams.set("q", filters.q);
-      const qs = urlParams.toString();
+      const params = new URLSearchParams();
+      filters.statuses.forEach((s) => params.append("statuses", s));
+      if (filters.q) params.set("q", filters.q);
+      const qs = params.toString();
       const res = await fetch(`${API}/ideas${qs ? "?" + qs : ""}`);
-      const ideas = await res.json();
-      const container = document.getElementById("ideas-list");
+      const ideas = (await res.json()) as Idea[];
+      const container = byId("ideas-list");
 
       if (!ideas.length) {
-        container.innerHTML = '<div class="alert bg-base-200 text-sm">No ideas yet. Click "Generate idea" to create one from a seed.</div>';
+        container.innerHTML =
+          '<div class="alert bg-base-200 text-sm">Aún no hay ideas. Pulsa "Generar idea" para crear una a partir de una semilla.</div>';
         return;
       }
 
       container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
-        ${ideas.map(idea => `
+        ${ideas
+          .map((idea) => {
+            const commentIcon = idea.comment
+              ? `<span class="text-info shrink-0" title="Tiene comentario para el escritor">${icon("message-circle", 15)}</span>`
+              : "";
+            return `
         <li class="list-row items-center gap-3 py-3">
           <div class="min-w-0 flex-1 max-w-[75%]">
-            <div class="font-medium flex items-center gap-1.5">
-              ${idea.comment
-                ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-info shrink-0" title="Tiene comentario para el escritor"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>`
-                : ""}
-              <span>${esc(idea.title)}</span>
+            <div class="font-medium flex items-center gap-1.5" title="${esc(idea.title)}">
+              ${commentIcon}
+              <span class="truncate">${esc(idea.title)}</span>
             </div>
-            <div class="text-sm text-base-content/50 mt-1 line-clamp-2">${esc(idea.summary || "")}</div>
+            <div class="text-sm text-base-content/60 mt-1 line-clamp-2">${esc(idea.summary || "")}</div>
             <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs text-base-content/40">seed: ${esc(idea.seed_id || "")}</span>
-              ${idea.source_url
-                ? `<a href="${esc(idea.source_url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline truncate max-w-[200px]">${esc(idea.source_url)}</a>`
-                : ""}
+              <span class="text-xs text-base-content/60">semilla: ${esc(idea.seed_id || "")}</span>
+              ${
+                idea.source_url
+                  ? `<a href="${esc(idea.source_url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-primary hover:underline truncate max-w-[200px]" title="${esc(idea.source_url)}">${esc(idea.source_url)}</a>`
+                  : ""
+              }
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0 ml-auto">
-            <span class="badge badge-md badge-soft whitespace-nowrap ${idea.status === "pending" ? "badge-warning" : idea.status === "used" ? "badge-success" : "badge-error"}">${idea.status}</span>
-            <span class="text-sm text-base-content/40 whitespace-nowrap">${idea.created_at ? new Date(idea.created_at).toLocaleDateString() : "—"}</span>
-            <div class="flex gap-1">${idea.status === "pending"
-              ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${idea.id}" aria-label="Discard idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`
-              : ""}<a href="/ideas/edit?id=${idea.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a>${idea.status !== "used"
-              ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${idea.id}" aria-label="Delete idea"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>`
-              : ""}</div>
+            <span class="badge badge-md badge-soft whitespace-nowrap ${idea.status === "pending" ? "badge-warning" : idea.status === "used" ? "badge-success" : "badge-error"}" title="Estado ${statusLabel(idea.status)}">${statusLabel(idea.status)}</span>
+            <span class="text-sm text-base-content/60 whitespace-nowrap">${idea.created_at ? new Date(idea.created_at).toLocaleDateString() : "—"}</span>
+            <div class="flex gap-1">${
+              idea.status === "pending"
+                ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${idea.id}" aria-label="Descartar idea" title="Descartar idea">${icon("close", 16)}</button>`
+                : ""
+            }<a href="/ideas/edit?id=${idea.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar idea" title="Editar idea">${icon("edit", 16)}</a>${
+              idea.status !== "used"
+                ? `<button class="btn btn-square btn-ghost btn-sm text-error" data-action="delete" data-id="${idea.id}" aria-label="Eliminar idea" title="Eliminar idea">${icon("trash", 16)}</button>`
+                : ""
+            }</div>
           </div>
-        </li>`).join("")}
+        </li>`;
+          })
+          .join("")}
       </ul>`;
     }
 
-    document.getElementById("ideas-list").addEventListener("click", async (e) => {
-      const btn = e.target.closest("[data-action]");
+    byId("ideas-list").addEventListener("click", async (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
       if (!btn) return;
       hideError();
-      const id = btn.dataset.id;
+      const id = btn.dataset.id ?? "";
 
       try {
         switch (btn.dataset.action) {
@@ -167,48 +193,52 @@ import Nav from "../components/Nav.astro";
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ status: "discarded" }),
             });
-            if (!res.ok) throw new Error(await getErrorMsg(res));
+            if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
           }
           case "delete": {
-            const ok = await askConfirm("Delete this idea permanently?");
+            const ok = await askConfirm("¿Eliminar esta idea permanentemente?");
             if (!ok) return;
             const res = await fetch(`${API}/ideas/${id}`, { method: "DELETE" });
-            if (!res.ok) throw new Error(await getErrorMsg(res));
+            if (!res.ok) throw new Error(await getErrorMessage(res));
             break;
           }
         }
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       }
     });
 
-    document.getElementById("btn-generate").addEventListener("click", async () => {
+    byId("btn-generate").addEventListener("click", async () => {
       hideError();
-      const modal = document.getElementById("generate-modal");
-      const select = document.getElementById("seed-select");
+      const modal = byId<HTMLDialogElement>("generate-modal");
+      const select = byId<HTMLSelectElement>("seed-select");
 
       const res = await fetch(`${API}/seeds?status=approved`);
-      const seeds = await res.json();
+      const seeds = (await res.json()) as Seed[];
       select.innerHTML = seeds.length
-        ? seeds.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join("")
-        : '<option value="">No approved seeds available</option>';
+        ? seeds.map((s) => `<option value="${s.id}">${esc(s.title)}</option>`).join("")
+        : '<option value="">No hay semillas aprobadas</option>';
 
       modal.showModal();
+      setTimeout(() => select.focus(), 0);
     });
 
-    document.getElementById("modal-cancel").addEventListener("click", () => {
-      document.getElementById("generate-modal").close();
+    byId("modal-cancel").addEventListener("click", () => {
+      byId<HTMLDialogElement>("generate-modal").close();
     });
 
-    document.getElementById("modal-generate").addEventListener("click", async () => {
-      const seedId = document.getElementById("seed-select").value;
-      if (!seedId) { showError("Select a seed first."); return; }
+    byId("modal-generate").addEventListener("click", async () => {
+      const seedId = byId<HTMLSelectElement>("seed-select").value;
+      if (!seedId) {
+        showError("Selecciona una semilla.");
+        return;
+      }
 
-      const btn = document.getElementById("modal-generate");
+      const btn = byId<HTMLButtonElement>("modal-generate");
       btn.disabled = true;
-      btn.textContent = "Generating...";
+      btn.textContent = "Generando…";
       hideError();
 
       try {
@@ -217,48 +247,46 @@ import Nav from "../components/Nav.astro";
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ seed_id: seedId, interests: "" }),
         });
-        if (!res.ok) throw new Error(await getErrorMsg(res));
-        document.getElementById("generate-modal").close();
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        byId<HTMLDialogElement>("generate-modal").close();
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Generate";
+        btn.textContent = "Generar";
       }
     });
 
-    // ── Filters ──
-
-    function escAttr(str) {
-      return esc(str).replace(/"/g, "&quot;");
-    }
+    // ── Filtros ──
 
     function renderFilters() {
-      const container = document.getElementById("active-filters");
+      const container = byId("active-filters");
       container.innerHTML = "";
 
       if (activeTypes.has("status")) {
         const checked = new Set(filters.statuses);
-        const checkboxes = ALL_STATUSES.map(st => `
+        const checkboxes = ALL_STATUSES.map(
+          (st) => `
           <label class="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" class="checkbox checkbox-xs" data-status="${st}" ${checked.has(st) ? "checked" : ""} />
-            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${st}</span>
-          </label>`).join("");
+            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${statusLabel(st)}</span>
+          </label>`
+        ).join("");
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Status</span>
+            <span class="text-xs font-medium text-base-content/60">Estado</span>
             <div class="flex items-center gap-1.5 flex-wrap">${checkboxes}</div>
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Remove status filter">✕</button>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Quitar filtro de estado" title="Quitar filtro de estado">${icon("close", 14)}</button>
           </div>`;
       }
 
       if (activeTypes.has("keyword")) {
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Keyword</span>
-            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="search title, summary" value="${escAttr(filters.q)}" />
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Remove keyword filter">✕</button>
+            <span class="text-xs font-medium text-base-content/60">Palabra clave</span>
+            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="buscar título, resumen" value="${escAttr(filters.q)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Quitar filtro de palabra clave" title="Quitar filtro de palabra clave">${icon("close", 14)}</button>
           </div>`;
       }
 
@@ -267,9 +295,10 @@ import Nav from "../components/Nav.astro";
     }
 
     function updateAddFilterMenu() {
-      document.querySelectorAll("[data-add-filter]").forEach(btn => {
-        const type = btn.dataset.addFilter;
+      qAll<HTMLButtonElement>("[data-add-filter]").forEach((btn) => {
+        const type = btn.dataset.addFilter ?? "";
         const li = btn.closest("li");
+        if (!li) return;
         if (activeTypes.has(type)) {
           li.classList.add("hidden");
         } else {
@@ -279,9 +308,9 @@ import Nav from "../components/Nav.astro";
     }
 
     function bindFilterEvents() {
-      document.querySelectorAll("[data-remove-filter]").forEach(btn => {
+      qAll<HTMLButtonElement>("[data-remove-filter]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const type = btn.dataset.removeFilter;
+          const type = btn.dataset.removeFilter ?? "";
           activeTypes.delete(type);
           if (type === "status") filters.statuses = [];
           if (type === "keyword") filters.q = "";
@@ -290,14 +319,16 @@ import Nav from "../components/Nav.astro";
         });
       });
 
-      document.querySelectorAll("[data-status]").forEach(cb => {
+      qAll<HTMLInputElement>("[data-status]").forEach((cb) => {
         cb.addEventListener("change", () => {
-          filters.statuses = Array.from(document.querySelectorAll("[data-status]:checked")).map(el => el.dataset.status);
+          filters.statuses = qAll<HTMLInputElement>("[data-status]:checked")
+            .map((el) => el.dataset.status ?? "")
+            .filter(Boolean);
           load();
         });
       });
 
-      const qInput = document.getElementById("filter-q");
+      const qInput = byId<HTMLInputElement>("filter-q");
       if (qInput) {
         qInput.addEventListener("input", () => {
           filters.q = qInput.value;
@@ -307,9 +338,9 @@ import Nav from "../components/Nav.astro";
       }
     }
 
-    document.querySelectorAll("[data-add-filter]").forEach(btn => {
+    qAll<HTMLButtonElement>("[data-add-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const type = btn.dataset.addFilter;
+        const type = btn.dataset.addFilter ?? "";
         if (activeTypes.has(type)) return;
         activeTypes.add(type);
         const dropdown = btn.closest("details");

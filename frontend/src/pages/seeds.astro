@@ -1,17 +1,24 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import Nav from "../components/Nav.astro";
+import Icon from "../components/Icon.astro";
 ---
 
-<Layout title="Seeds">
+<Layout title="Semillas">
   <Nav />
-  <main class="max-w-6xl mx-auto px-4 py-8">
+  <main id="main" class="max-w-6xl mx-auto px-4 py-8">
     <div class="flex items-center justify-between mb-6 gap-2 flex-wrap">
-      <h1 class="text-2xl font-bold">Seeds</h1>
-      <div class="flex gap-2">
-        <button class="btn btn-primary" id="btn-add-article">Add article</button>
-        <button class="btn btn-outline" id="btn-generate-interests">Generate from interests</button>
-        <button class="btn btn-outline" id="btn-generate-sources">Generate from sources</button>
+      <h1 class="text-2xl font-bold">Semillas</h1>
+      <div class="flex gap-2 flex-wrap">
+        <button class="btn btn-primary gap-1.5" id="btn-add-article">
+          <Icon name="plus" size={16} /> Añadir artículo
+        </button>
+        <button class="btn btn-outline gap-1.5" id="btn-generate-interests">
+          <Icon name="sparkles" size={16} /> Generar desde intereses
+        </button>
+        <button class="btn btn-outline gap-1.5" id="btn-generate-sources">
+          <Icon name="database" size={16} /> Generar desde fuentes
+        </button>
       </div>
     </div>
 
@@ -19,30 +26,38 @@ import Nav from "../components/Nav.astro";
 
     <div id="filters-bar" class="flex items-center gap-2 flex-wrap mb-4">
       <details class="dropdown">
-        <summary class="btn btn-sm btn-outline">+ Add filter</summary>
-        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-44 p-2 shadow-sm">
-          <li><button data-add-filter="status">Status</button></li>
-          <li><button data-add-filter="keyword">Keyword</button></li>
+        <summary class="btn btn-sm btn-outline gap-1.5">
+          <Icon name="sliders" size={14} /> Añadir filtro
+        </summary>
+        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-48 p-2 shadow-sm">
+          <li><button data-add-filter="status">Estado</button></li>
+          <li><button data-add-filter="keyword">Palabra clave</button></li>
           <li><button data-add-filter="url">URL</button></li>
         </ul>
       </details>
       <div id="active-filters" class="flex items-center gap-2 flex-wrap"></div>
     </div>
 
-    <div id="seeds-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
+    <div id="seeds-list">
+      <span class="loading loading-spinner loading-sm"></span>
+      <span class="text-sm text-base-content/60">Cargando…</span>
+    </div>
   </main>
 
   <dialog id="interests-modal" class="modal">
     <div class="modal-box">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Generate from interests</legend>
-        <p class="text-sm text-base-content/50 mb-2">Enter keywords to match against source names and tags. Seeds will be generated from matching sources.</p>
-        <label class="label">Interests (comma-separated)</label>
+        <legend class="fieldset-legend text-xl font-bold">Generar desde intereses</legend>
+        <p class="text-sm text-base-content/60 mb-2">
+          Introduce palabras clave para buscar coincidencias en nombres y etiquetas de fuentes. Se
+          generarán semillas desde las fuentes que coincidan.
+        </p>
+        <label class="label" for="interests-input">Intereses (separados por comas)</label>
         <textarea id="interests-input" class="textarea w-full" rows="4" placeholder="soberanía digital, ética digital, pedagogía digital"></textarea>
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="interests-cancel">Cancel</button>
-        <button class="btn btn-primary" id="interests-generate">Generate</button>
+        <button class="btn" id="interests-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="interests-generate">Generar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -51,15 +66,15 @@ import Nav from "../components/Nav.astro";
   <dialog id="sources-modal" class="modal">
     <div class="modal-box max-w-lg">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Generate from sources</legend>
-        <p class="text-sm text-base-content/50 mb-2">Select the sources to collect from.</p>
+        <legend class="fieldset-legend text-xl font-bold">Generar desde fuentes</legend>
+        <p class="text-sm text-base-content/60 mb-2">Selecciona las fuentes de las que recopilar.</p>
         <div id="sources-list-modal" class="max-h-64 overflow-y-auto space-y-2">
           <span class="loading loading-spinner loading-sm"></span>
         </div>
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="sources-cancel">Cancel</button>
-        <button class="btn btn-primary" id="sources-generate" disabled>Generate</button>
+        <button class="btn" id="sources-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="sources-generate" disabled>Generar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
@@ -68,38 +83,55 @@ import Nav from "../components/Nav.astro";
   <dialog id="add-article-modal" class="modal">
     <div class="modal-box max-w-2xl">
       <fieldset class="fieldset">
-        <legend class="fieldset-legend text-xl font-bold">Add article</legend>
-        <p class="text-sm text-base-content/50 mb-2">Paste a URL to scrape its content, or fill in the fields manually.</p>
+        <legend class="fieldset-legend text-xl font-bold">Añadir artículo</legend>
+        <p class="text-sm text-base-content/60 mb-2">
+          Pega una URL para extraer su contenido, o rellena los campos manualmente.
+        </p>
 
-        <label class="label">URL</label>
+        <label class="label" for="add-article-url">URL</label>
         <div class="flex gap-2">
-          <input type="url" id="add-article-url" class="input flex-1" placeholder="https://..." />
-          <button class="btn btn-outline shrink-0" id="add-article-fetch">Fetch</button>
+          <input type="url" id="add-article-url" class="input flex-1" placeholder="https://…" />
+          <button class="btn btn-outline shrink-0" id="add-article-fetch">Obtener</button>
         </div>
 
-        <label class="label mt-2">Title</label>
-        <input type="text" id="add-article-title" class="input w-full" placeholder="Article title" />
+        <label class="label mt-2" for="add-article-title">Título</label>
+        <input type="text" id="add-article-title" class="input w-full" placeholder="Título del artículo" />
 
-        <label class="label mt-2">Content</label>
-        <textarea id="add-article-content" class="textarea w-full" rows="10" placeholder="Article content..."></textarea>
+        <label class="label mt-2" for="add-article-content">Contenido</label>
+        <textarea id="add-article-content" class="textarea w-full" rows="10" placeholder="Contenido del artículo…"></textarea>
 
-        <label class="label mt-2">Tags (comma-separated)</label>
-        <input type="text" id="add-article-tags" class="input w-full" placeholder="tech, ai, ethics" />
+        <label class="label mt-2" for="add-article-tags">Etiquetas (separadas por comas)</label>
+        <input type="text" id="add-article-tags" class="input w-full" placeholder="tech, ia, ética" />
       </fieldset>
       <div class="modal-action">
-        <button class="btn" id="add-article-cancel">Cancel</button>
-        <button class="btn btn-primary" id="add-article-save" disabled>Save</button>
+        <button class="btn" id="add-article-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="add-article-save" disabled>Guardar</button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop"><button>close</button></form>
   </dialog>
 
   <script>
+    import { icon } from "~/scripts/icons";
+    import { byId, qAll, esc, escAttr, getErrorMessage } from "~/scripts/dom";
+    import type { ScrapeResult, Seed, Source } from "~/scripts/types";
+
     const API = "http://localhost:8000/api";
 
-    const errorEl = document.getElementById("error-msg");
+    const errorEl = byId("error-msg");
 
-    function showError(msg) {
+    const STATUS_ES: Record<string, string> = {
+      pending: "pendiente",
+      approved: "aprobado",
+      used: "usado",
+      discarded: "descartado",
+    };
+
+    function statusLabel(s: string) {
+      return STATUS_ES[s] || s;
+    }
+
+    function showError(msg: string) {
       errorEl.textContent = msg;
       errorEl.classList.remove("hidden");
     }
@@ -108,72 +140,77 @@ import Nav from "../components/Nav.astro";
       errorEl.classList.add("hidden");
     }
 
-    async function getErrorMessage(res) {
-      try {
-        const body = await res.json();
-        if (Array.isArray(body.detail)) return body.detail[0]?.msg || "Request failed";
-        return body.detail || "Request failed";
-      } catch { return "Request failed"; }
-    }
-
     async function load() {
       hideError();
       const params = new URLSearchParams();
-      (filters.statuses || []).forEach(s => params.append("statuses", s));
+      filters.statuses.forEach((s) => params.append("statuses", s));
       if (filters.q) params.set("q", filters.q);
       if (filters.url) params.set("url", filters.url);
       const qs = params.toString();
       const res = await fetch(`${API}/seeds${qs ? "?" + qs : ""}`);
-      const seeds = await res.json();
-      const container = document.getElementById("seeds-list");
+      const seeds = (await res.json()) as Seed[];
+      const container = byId("seeds-list");
 
       if (!seeds.length) {
-        container.innerHTML = '<div class="alert bg-base-200 text-sm">No seeds yet. Click "Add article" to paste a URL, or "Generate from sources" to collect from your configured sources.</div>';
+        container.innerHTML =
+          '<div class="alert bg-base-200 text-sm">Aún no hay semillas. Pulsa "Añadir artículo" para pegar una URL, o "Generar desde fuentes" para recopilar desde tus fuentes configuradas.</div>';
         return;
       }
 
       container.innerHTML = `<ul class="list bg-base-100 border border-base-300 rounded-box divide-y divide-base-200">
-        ${seeds.map(s => {
-          const domain = s.source_url ? (() => { try { return new URL(s.source_url).hostname; } catch { return s.source_url; } })() : null;
-          return `
+        ${seeds
+          .map((s) => {
+            const domain = s.source_url
+              ? (() => {
+                  try {
+                    return new URL(s.source_url).hostname;
+                  } catch {
+                    return s.source_url || "";
+                  }
+                })()
+              : null;
+            const canAct = s.status === "pending";
+            const approveBtn = canAct
+              ? `<button class="btn btn-square btn-ghost btn-sm text-info" data-action="approve" data-id="${s.id}" aria-label="Aprobar semilla" title="Aprobar semilla">${icon("check", 16)}</button><button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${s.id}" aria-label="Descartar semilla" title="Descartar semilla">${icon("close", 16)}</button>`
+              : `<button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Aprobar semilla (no disponible)" title="No disponible en estado ${statusLabel(s.status)}">${icon("check", 16)}</button><button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Descartar semilla (no disponible)" title="No disponible en estado ${statusLabel(s.status)}">${icon("close", 16)}</button>`;
+            return `
           <li class="list-row items-center gap-3 py-3" style="--list-grid-cols: 1fr minmax(0,auto)">
             <div class="min-w-0 max-w-[75%]">
-              <div class="font-medium">${esc(s.title)}</div>
-              <div class="text-xs text-base-content/40 mb-1">${esc(s.source_name || "")}</div>
-              ${s.source_url
-                ? `<div class="flex items-center gap-1 text-sm text-base-content/50">
+              <div class="font-medium truncate" title="${esc(s.title)}">${esc(s.title)}</div>
+              <div class="text-xs text-base-content/60 mb-1">${esc(s.source_name || "")}</div>
+              ${
+                s.source_url
+                  ? `<div class="flex items-center gap-1 text-sm text-base-content/60">
                     <a href="${esc(s.source_url)}" target="_blank" rel="noopener noreferrer" class="truncate max-w-[200px] hover:text-primary transition-colors" title="${esc(s.source_url)}">${esc(domain)}</a>
-                    <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${esc(s.source_url)}" aria-label="Copy URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                    <button class="btn btn-square btn-ghost btn-xs" data-action="copy-url" data-url="${esc(s.source_url)}" aria-label="Copiar URL" title="Copiar URL">${icon("copy", 14)}</button>
                   </div>`
-                : ''}
+                  : ""
+              }
               <div class="flex flex-wrap gap-1 mt-1 w-full">
-                ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
+                ${(s.tags || [])
+                  .map((t) => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`)
+                  .join("")}
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0 ml-auto">
-              <span class="badge badge-md badge-soft whitespace-nowrap ${s.status === "pending" ? "badge-warning" : s.status === "approved" ? "badge-info" : s.status === "used" ? "badge-success" : "badge-error"}">${s.status}</span>
-              <span class="text-sm text-base-content/40 whitespace-nowrap">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</span>
+              <span class="badge badge-md badge-soft whitespace-nowrap ${s.status === "pending" ? "badge-warning" : s.status === "approved" ? "badge-info" : s.status === "used" ? "badge-success" : "badge-error"}" title="Estado ${statusLabel(s.status)}">${statusLabel(s.status)}</span>
+              <span class="text-sm text-base-content/60 whitespace-nowrap">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</span>
               <div class="flex gap-1">
-                <a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Edit seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></a>${s.status === "pending"
-                ? `<button class="btn btn-square btn-ghost btn-sm text-info" data-action="approve" data-id="${s.id}" aria-label="Approve seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button><button class="btn btn-square btn-ghost btn-sm text-error" data-action="discard" data-id="${s.id}" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`
-                : `<button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Approve seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button><button class="btn btn-square btn-ghost btn-sm btn-disabled" tabindex="-1" aria-disabled="true" aria-label="Discard seed"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>`}</div>
+                <a href="/seeds/edit?id=${s.id}" class="btn btn-square btn-ghost btn-sm" aria-label="Editar semilla" title="Editar semilla">${icon("edit", 16)}</a>
+                ${approveBtn}
+              </div>
             </div>
-          </li>`}).join("")}
+          </li>`;
+          })
+          .join("")}
       </ul>`;
     }
 
-    function esc(str) {
-      if (!str) return "";
-      const d = document.createElement("div");
-      d.appendChild(document.createTextNode(str));
-      return d.innerHTML;
-    }
-
-    document.getElementById("seeds-list").addEventListener("click", async (e) => {
-      const btn = e.target.closest("[data-action]");
+    byId("seeds-list").addEventListener("click", async (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-action]");
       if (!btn) return;
       hideError();
-      const id = btn.dataset.id;
+      const id = btn.dataset.id ?? "";
 
       try {
         if (btn.dataset.action === "discard") {
@@ -194,62 +231,71 @@ import Nav from "../components/Nav.astro";
           load();
         } else if (btn.dataset.action === "copy-url") {
           try {
-            await navigator.clipboard.writeText(btn.dataset.url);
+            await navigator.clipboard.writeText(btn.dataset.url ?? "");
             const original = btn.innerHTML;
-            btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            btn.innerHTML = icon("check", 14);
             btn.classList.add("text-success");
             setTimeout(() => {
               btn.innerHTML = original;
               btn.classList.remove("text-success");
             }, 1500);
           } catch {
-            showError("Failed to copy URL");
+            showError("No se pudo copiar la URL");
           }
         }
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       }
     });
 
-    // ── Generate from interests ──
+    // ── Generar desde intereses ──
 
-    document.getElementById("btn-generate-interests").addEventListener("click", () => {
+    byId("btn-generate-interests").addEventListener("click", () => {
       hideError();
-      document.getElementById("interests-input").value = "";
-      document.getElementById("interests-modal").showModal();
+      byId<HTMLTextAreaElement>("interests-input").value = "";
+      byId<HTMLDialogElement>("interests-modal").showModal();
+      setTimeout(() => byId<HTMLTextAreaElement>("interests-input").focus(), 0);
     });
 
-    document.getElementById("interests-cancel").addEventListener("click", () => {
-      document.getElementById("interests-modal").close();
+    byId("interests-cancel").addEventListener("click", () => {
+      byId<HTMLDialogElement>("interests-modal").close();
     });
 
-    document.getElementById("interests-generate").addEventListener("click", async () => {
-      const raw = document.getElementById("interests-input").value.trim();
-      if (!raw) { showError("Please enter at least one interest keyword."); return; }
+    byId("interests-generate").addEventListener("click", async () => {
+      const raw = byId<HTMLTextAreaElement>("interests-input").value.trim();
+      if (!raw) {
+        showError("Introduce al menos un interés.");
+        return;
+      }
 
-      const keywords = raw.split(",").map(k => k.trim().toLowerCase()).filter(Boolean);
-      if (!keywords.length) { showError("Please enter at least one interest keyword."); return; }
+      const keywords = raw.split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
+      if (!keywords.length) {
+        showError("Introduce al menos un interés.");
+        return;
+      }
 
-      const btn = document.getElementById("interests-generate");
+      const btn = byId<HTMLButtonElement>("interests-generate");
       btn.disabled = true;
-      btn.textContent = "Generating...";
+      btn.textContent = "Generando…";
       hideError();
 
       try {
         const sourcesRes = await fetch(`${API}/sources`);
-        const sources = await sourcesRes.json();
+        const sources = (await sourcesRes.json()) as Source[];
 
         const matchingIds = sources
-          .filter(s => s.enabled !== false && (
-            keywords.some(k => s.name.toLowerCase().includes(k))
-            || (s.tags || []).some(t => keywords.some(k => t.toLowerCase().includes(k)))
-          ))
-          .map(s => s.id);
+          .filter(
+            (s) =>
+              s.enabled !== false &&
+              (keywords.some((k) => s.name.toLowerCase().includes(k)) ||
+                (s.tags || []).some((t) => keywords.some((k) => t.toLowerCase().includes(k))))
+          )
+          .map((s) => s.id);
 
         if (!matchingIds.length) {
-          showError("No sources match your interests. Add sources with matching tags first.");
+          showError("Ninguna fuente coincide con tus intereses. Añade fuentes con etiquetas coincidentes primero.");
           btn.disabled = false;
-          btn.textContent = "Generate";
+          btn.textContent = "Generar";
           return;
         }
 
@@ -260,73 +306,82 @@ import Nav from "../components/Nav.astro";
         });
         if (!res.ok) throw new Error(await getErrorMessage(res));
 
-        document.getElementById("interests-modal").close();
+        byId<HTMLDialogElement>("interests-modal").close();
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Generate";
+        btn.textContent = "Generar";
       }
     });
 
-    // ── Generate from sources ──
+    // ── Generar desde fuentes ──
 
     async function loadSourceCheckboxes() {
       try {
         const res = await fetch(`${API}/sources`);
-        const sources = await res.json();
-        const container = document.getElementById("sources-list-modal");
+        const sources = (await res.json()) as Source[];
+        const container = byId("sources-list-modal");
 
         if (!sources.length) {
-          container.innerHTML = '<div class="text-sm text-base-content/40">No sources configured.</div>';
+          container.innerHTML = '<div class="text-sm text-base-content/60">No hay fuentes configuradas.</div>';
           return;
         }
 
-        container.innerHTML = sources.map(s => `
+        container.innerHTML = sources
+          .map(
+            (s) => `
           <label class="flex items-center gap-3 p-2 rounded-box hover:bg-base-200 cursor-pointer ${s.enabled === false ? "opacity-40" : ""}">
             <input type="checkbox" class="checkbox checkbox-sm source-checkbox" data-id="${esc(s.id)}" ${s.enabled !== false ? "" : "disabled"} />
             <div class="min-w-0 flex-1">
               <div class="text-sm font-medium">${esc(s.name)}</div>
-              <div class="text-xs text-base-content/40">${esc(s.source_type)} ${s.tags?.length ? "— " + s.tags.map(t => esc(t)).join(", ") : ""}</div>
+              <div class="text-xs text-base-content/60">${esc(s.source_type)} ${s.tags?.length ? "— " + s.tags.map((t) => esc(t)).join(", ") : ""}</div>
             </div>
-          </label>
-        `).join("");
+          </label>`
+          )
+          .join("");
 
-        container.querySelectorAll(".source-checkbox").forEach(cb => {
+        qAll<HTMLInputElement>(".source-checkbox").forEach((cb) => {
           cb.addEventListener("change", updateSourcesGenerateButton);
         });
         updateSourcesGenerateButton();
       } catch {
-        document.getElementById("sources-list-modal").innerHTML = '<div class="text-sm text-error">Failed to load sources.</div>';
+        byId("sources-list-modal").innerHTML =
+          '<div class="text-sm text-error">No se pudieron cargar las fuentes.</div>';
       }
     }
 
     function updateSourcesGenerateButton() {
-      const checked = document.querySelectorAll(".source-checkbox:checked");
-      document.getElementById("sources-generate").disabled = checked.length === 0;
+      const checked = qAll<HTMLInputElement>(".source-checkbox:checked");
+      byId<HTMLButtonElement>("sources-generate").disabled = checked.length === 0;
     }
 
-    document.getElementById("btn-generate-sources").addEventListener("click", () => {
+    byId("btn-generate-sources").addEventListener("click", () => {
       hideError();
-      document.getElementById("sources-list-modal").innerHTML = '<span class="loading loading-spinner loading-sm"></span>';
+      byId("sources-list-modal").innerHTML =
+        '<span class="loading loading-spinner loading-sm"></span>';
       loadSourceCheckboxes();
-      document.getElementById("sources-modal").showModal();
+      byId<HTMLDialogElement>("sources-modal").showModal();
     });
 
-    document.getElementById("sources-cancel").addEventListener("click", () => {
-      document.getElementById("sources-modal").close();
+    byId("sources-cancel").addEventListener("click", () => {
+      byId<HTMLDialogElement>("sources-modal").close();
     });
 
-    document.getElementById("sources-generate").addEventListener("click", async () => {
-      const checked = document.querySelectorAll(".source-checkbox:checked");
-      const sourceIds = Array.from(checked).map(cb => cb.dataset.id);
+    byId("sources-generate").addEventListener("click", async () => {
+      const sourceIds = qAll<HTMLInputElement>(".source-checkbox:checked")
+        .map((cb) => cb.dataset.id ?? "")
+        .filter(Boolean);
 
-      if (!sourceIds.length) { showError("Select at least one source."); return; }
+      if (!sourceIds.length) {
+        showError("Selecciona al menos una fuente.");
+        return;
+      }
 
-      const btn = document.getElementById("sources-generate");
+      const btn = byId<HTMLButtonElement>("sources-generate");
       btn.disabled = true;
-      btn.textContent = "Generating...";
+      btn.textContent = "Generando…";
       hideError();
 
       try {
@@ -337,25 +392,25 @@ import Nav from "../components/Nav.astro";
         });
         if (!res.ok) throw new Error(await getErrorMessage(res));
 
-        document.getElementById("sources-modal").close();
+        byId<HTMLDialogElement>("sources-modal").close();
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         btn.disabled = false;
-        btn.textContent = "Generate";
+        btn.textContent = "Generar";
       }
     });
 
-    // ── Add article ──
+    // ── Añadir artículo ──
 
-    const addModal = document.getElementById("add-article-modal");
-    const addUrlInput = document.getElementById("add-article-url");
-    const addTitleInput = document.getElementById("add-article-title");
-    const addContentInput = document.getElementById("add-article-content");
-    const addTagsInput = document.getElementById("add-article-tags");
-    const addFetchBtn = document.getElementById("add-article-fetch");
-    const addSaveBtn = document.getElementById("add-article-save");
+    const addModal = byId<HTMLDialogElement>("add-article-modal");
+    const addUrlInput = byId<HTMLInputElement>("add-article-url");
+    const addTitleInput = byId<HTMLInputElement>("add-article-title");
+    const addContentInput = byId<HTMLTextAreaElement>("add-article-content");
+    const addTagsInput = byId<HTMLInputElement>("add-article-tags");
+    const addFetchBtn = byId<HTMLButtonElement>("add-article-fetch");
+    const addSaveBtn = byId<HTMLButtonElement>("add-article-save");
 
     function updateAddSaveButton() {
       addSaveBtn.disabled = !addUrlInput.value.trim() || !addTitleInput.value.trim();
@@ -364,28 +419,32 @@ import Nav from "../components/Nav.astro";
     addUrlInput.addEventListener("input", updateAddSaveButton);
     addTitleInput.addEventListener("input", updateAddSaveButton);
 
-    document.getElementById("btn-add-article").addEventListener("click", () => {
+    byId("btn-add-article").addEventListener("click", () => {
       hideError();
       addUrlInput.value = "";
       addTitleInput.value = "";
       addContentInput.value = "";
       addTagsInput.value = "";
       addFetchBtn.disabled = false;
-      addFetchBtn.textContent = "Fetch";
+      addFetchBtn.textContent = "Obtener";
       addSaveBtn.disabled = true;
       addModal.showModal();
+      setTimeout(() => addUrlInput.focus(), 0);
     });
 
-    document.getElementById("add-article-cancel").addEventListener("click", () => {
+    byId("add-article-cancel").addEventListener("click", () => {
       addModal.close();
     });
 
     addFetchBtn.addEventListener("click", async () => {
       const url = addUrlInput.value.trim();
-      if (!url) { showError("Enter a URL first."); return; }
+      if (!url) {
+        showError("Introduce una URL primero.");
+        return;
+      }
 
       addFetchBtn.disabled = true;
-      addFetchBtn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Fetching...';
+      addFetchBtn.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Obteniendo…';
       hideError();
 
       try {
@@ -395,15 +454,15 @@ import Nav from "../components/Nav.astro";
           body: JSON.stringify({ url }),
         });
         if (!res.ok) throw new Error(await getErrorMessage(res));
-        const data = await res.json();
+        const data = (await res.json()) as ScrapeResult;
         if (data.title) addTitleInput.value = data.title;
         if (data.content) addContentInput.value = data.content;
         updateAddSaveButton();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         addFetchBtn.disabled = false;
-        addFetchBtn.textContent = "Fetch";
+        addFetchBtn.textContent = "Obtener";
       }
     });
 
@@ -411,12 +470,15 @@ import Nav from "../components/Nav.astro";
       const url = addUrlInput.value.trim();
       const title = addTitleInput.value.trim();
       const content = addContentInput.value.trim();
-      const tags = addTagsInput.value.split(",").map(t => t.trim()).filter(Boolean);
+      const tags = addTagsInput.value.split(",").map((t) => t.trim()).filter(Boolean);
 
-      if (!url || !title) { showError("URL and title are required."); return; }
+      if (!url || !title) {
+        showError("La URL y el título son obligatorios.");
+        return;
+      }
 
       addSaveBtn.disabled = true;
-      addSaveBtn.textContent = "Saving...";
+      addSaveBtn.textContent = "Guardando…";
       hideError();
 
       try {
@@ -430,50 +492,53 @@ import Nav from "../components/Nav.astro";
         addModal.close();
         load();
       } catch (e) {
-        showError("Error: " + e.message);
+        showError("Error: " + (e as Error).message);
       } finally {
         addSaveBtn.disabled = false;
-        addSaveBtn.textContent = "Save";
+        addSaveBtn.textContent = "Guardar";
       }
     });
 
-    // ── Filters ──
+    // ── Filtros ──
 
     const ALL_STATUSES = ["pending", "approved", "used", "discarded"];
-    const STATUS_LABELS = { pending: "warning", approved: "info", used: "success", discarded: "error" };
+    const STATUS_LABELS: Record<string, string> = {
+      pending: "warning",
+      approved: "info",
+      used: "success",
+      discarded: "error",
+    };
 
-    const filters = { statuses: [], q: "", url: "" };
-    const activeTypes = new Set();
-
-    function escAttr(str) {
-      return esc(str).replace(/"/g, "&quot;");
-    }
+    const filters = { statuses: [] as string[], q: "", url: "" };
+    const activeTypes = new Set<string>();
 
     function renderFilters() {
-      const container = document.getElementById("active-filters");
+      const container = byId("active-filters");
       container.innerHTML = "";
 
       if (activeTypes.has("status")) {
         const checked = new Set(filters.statuses);
-        const checkboxes = ALL_STATUSES.map(st => `
+        const checkboxes = ALL_STATUSES.map(
+          (st) => `
           <label class="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" class="checkbox checkbox-xs" data-status="${st}" ${checked.has(st) ? "checked" : ""} />
-            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${st}</span>
-          </label>`).join("");
+            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${statusLabel(st)}</span>
+          </label>`
+        ).join("");
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Status</span>
+            <span class="text-xs font-medium text-base-content/60">Estado</span>
             <div class="flex items-center gap-1.5 flex-wrap">${checkboxes}</div>
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Remove status filter">✕</button>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Quitar filtro de estado" title="Quitar filtro de estado">${icon("close", 14)}</button>
           </div>`;
       }
 
       if (activeTypes.has("keyword")) {
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
-            <span class="text-xs font-medium text-base-content/60">Keyword</span>
-            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="search content" value="${escAttr(filters.q)}" />
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Remove keyword filter">✕</button>
+            <span class="text-xs font-medium text-base-content/60">Palabra clave</span>
+            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="buscar contenido" value="${escAttr(filters.q)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Quitar filtro de palabra clave" title="Quitar filtro de palabra clave">${icon("close", 14)}</button>
           </div>`;
       }
 
@@ -481,8 +546,8 @@ import Nav from "../components/Nav.astro";
         container.innerHTML += `
           <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
             <span class="text-xs font-medium text-base-content/60">URL</span>
-            <input type="text" class="input input-xs w-40" id="filter-url" placeholder="url fragment" value="${escAttr(filters.url)}" />
-            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="url" aria-label="Remove url filter">✕</button>
+            <input type="text" class="input input-xs w-40" id="filter-url" placeholder="fragmento de url" value="${escAttr(filters.url)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="url" aria-label="Quitar filtro de URL" title="Quitar filtro de URL">${icon("close", 14)}</button>
           </div>`;
       }
 
@@ -491,9 +556,10 @@ import Nav from "../components/Nav.astro";
     }
 
     function updateAddFilterMenu() {
-      document.querySelectorAll("[data-add-filter]").forEach(btn => {
-        const type = btn.dataset.addFilter;
+      qAll<HTMLButtonElement>("[data-add-filter]").forEach((btn) => {
+        const type = btn.dataset.addFilter ?? "";
         const li = btn.closest("li");
+        if (!li) return;
         if (activeTypes.has(type)) {
           li.classList.add("hidden");
         } else {
@@ -503,9 +569,9 @@ import Nav from "../components/Nav.astro";
     }
 
     function bindFilterEvents() {
-      document.querySelectorAll("[data-remove-filter]").forEach(btn => {
+      qAll<HTMLButtonElement>("[data-remove-filter]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const type = btn.dataset.removeFilter;
+          const type = btn.dataset.removeFilter ?? "";
           activeTypes.delete(type);
           if (type === "status") filters.statuses = [];
           if (type === "keyword") filters.q = "";
@@ -515,14 +581,16 @@ import Nav from "../components/Nav.astro";
         });
       });
 
-      document.querySelectorAll("[data-status]").forEach(cb => {
+      qAll<HTMLInputElement>("[data-status]").forEach((cb) => {
         cb.addEventListener("change", () => {
-          filters.statuses = Array.from(document.querySelectorAll("[data-status]:checked")).map(el => el.dataset.status);
+          filters.statuses = qAll<HTMLInputElement>("[data-status]:checked")
+            .map((el) => el.dataset.status ?? "")
+            .filter(Boolean);
           load();
         });
       });
 
-      const qInput = document.getElementById("filter-q");
+      const qInput = byId<HTMLInputElement>("filter-q");
       if (qInput) {
         qInput.addEventListener("input", () => {
           filters.q = qInput.value;
@@ -531,7 +599,7 @@ import Nav from "../components/Nav.astro";
         });
       }
 
-      const urlInput = document.getElementById("filter-url");
+      const urlInput = byId<HTMLInputElement>("filter-url");
       if (urlInput) {
         urlInput.addEventListener("input", () => {
           filters.url = urlInput.value;
@@ -541,9 +609,9 @@ import Nav from "../components/Nav.astro";
       }
     }
 
-    document.querySelectorAll("[data-add-filter]").forEach(btn => {
+    qAll<HTMLButtonElement>("[data-add-filter]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const type = btn.dataset.addFilter;
+        const type = btn.dataset.addFilter ?? "";
         if (activeTypes.has(type)) return;
         activeTypes.add(type);
         const dropdown = btn.closest("details");
