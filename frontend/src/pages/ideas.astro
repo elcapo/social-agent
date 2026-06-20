@@ -12,6 +12,18 @@ import Nav from "../components/Nav.astro";
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
+
+    <div id="filters-bar" class="flex items-center gap-2 flex-wrap mb-4">
+      <details class="dropdown">
+        <summary class="btn btn-sm btn-outline">+ Add filter</summary>
+        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-44 p-2 shadow-sm">
+          <li><button data-add-filter="status">Status</button></li>
+          <li><button data-add-filter="keyword">Keyword</button></li>
+        </ul>
+      </details>
+      <div id="active-filters" class="flex items-center gap-2 flex-wrap"></div>
+    </div>
+
     <div id="ideas-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
   </main>
 
@@ -46,10 +58,20 @@ import Nav from "../components/Nav.astro";
   <script>
     const API = "http://localhost:8000/api";
 
-    const params = new URLSearchParams(window.location.search);
-    const filterStatus = params.get("status");
-
     const errorEl = document.getElementById("error-msg");
+
+    const ALL_STATUSES = ["pending", "used", "discarded"];
+    const STATUS_LABELS = { pending: "warning", used: "success", discarded: "error" };
+
+    const filters = { statuses: [], q: "" };
+    const activeTypes = new Set();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const seedStatus = urlParams.get("status");
+    if (seedStatus && ALL_STATUSES.includes(seedStatus)) {
+      filters.statuses = [seedStatus];
+      activeTypes.add("status");
+    }
 
     function showError(msg) {
       errorEl.textContent = msg;
@@ -87,9 +109,11 @@ import Nav from "../components/Nav.astro";
 
     async function load() {
       hideError();
-      let url = `${API}/ideas`;
-      if (filterStatus) url += `?status=${filterStatus}`;
-      const res = await fetch(url);
+      const urlParams = new URLSearchParams();
+      (filters.statuses || []).forEach(s => urlParams.append("statuses", s));
+      if (filters.q) urlParams.set("q", filters.q);
+      const qs = urlParams.toString();
+      const res = await fetch(`${API}/ideas${qs ? "?" + qs : ""}`);
       const ideas = await res.json();
       const container = document.getElementById("ideas-list");
 
@@ -204,6 +228,98 @@ import Nav from "../components/Nav.astro";
       }
     });
 
+    // ── Filters ──
+
+    function escAttr(str) {
+      return esc(str).replace(/"/g, "&quot;");
+    }
+
+    function renderFilters() {
+      const container = document.getElementById("active-filters");
+      container.innerHTML = "";
+
+      if (activeTypes.has("status")) {
+        const checked = new Set(filters.statuses);
+        const checkboxes = ALL_STATUSES.map(st => `
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-xs" data-status="${st}" ${checked.has(st) ? "checked" : ""} />
+            <span class="badge badge-sm badge-soft badge-${STATUS_LABELS[st]}">${st}</span>
+          </label>`).join("");
+        container.innerHTML += `
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Status</span>
+            <div class="flex items-center gap-1.5 flex-wrap">${checkboxes}</div>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="status" aria-label="Remove status filter">✕</button>
+          </div>`;
+      }
+
+      if (activeTypes.has("keyword")) {
+        container.innerHTML += `
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Keyword</span>
+            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="search title, summary" value="${escAttr(filters.q)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Remove keyword filter">✕</button>
+          </div>`;
+      }
+
+      updateAddFilterMenu();
+      bindFilterEvents();
+    }
+
+    function updateAddFilterMenu() {
+      document.querySelectorAll("[data-add-filter]").forEach(btn => {
+        const type = btn.dataset.addFilter;
+        const li = btn.closest("li");
+        if (activeTypes.has(type)) {
+          li.classList.add("hidden");
+        } else {
+          li.classList.remove("hidden");
+        }
+      });
+    }
+
+    function bindFilterEvents() {
+      document.querySelectorAll("[data-remove-filter]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const type = btn.dataset.removeFilter;
+          activeTypes.delete(type);
+          if (type === "status") filters.statuses = [];
+          if (type === "keyword") filters.q = "";
+          renderFilters();
+          load();
+        });
+      });
+
+      document.querySelectorAll("[data-status]").forEach(cb => {
+        cb.addEventListener("change", () => {
+          filters.statuses = Array.from(document.querySelectorAll("[data-status]:checked")).map(el => el.dataset.status);
+          load();
+        });
+      });
+
+      const qInput = document.getElementById("filter-q");
+      if (qInput) {
+        qInput.addEventListener("input", () => {
+          filters.q = qInput.value;
+          clearTimeout(qInput._t);
+          qInput._t = setTimeout(load, 300);
+        });
+      }
+    }
+
+    document.querySelectorAll("[data-add-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const type = btn.dataset.addFilter;
+        if (activeTypes.has(type)) return;
+        activeTypes.add(type);
+        const dropdown = btn.closest("details");
+        if (dropdown) dropdown.open = false;
+        renderFilters();
+        load();
+      });
+    });
+
+    renderFilters();
     load();
   </script>
 </Layout>

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 import frontmatter
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from social_agent.agents.writer import WriterAgent
@@ -51,14 +51,36 @@ class ScheduleDraftRequest(BaseModel):
 
 
 @router.get("/drafts")
-def list_drafts(platform: Optional[str] = None, status: Optional[str] = None) -> list[Draft]:
+def list_drafts(
+    platform: Optional[str] = None,
+    platforms: Optional[list[str]] = Query(default=None),
+    status: Optional[str] = None,
+    statuses: Optional[list[str]] = Query(default=None),
+    q: Optional[str] = None,
+) -> list[Draft]:
+    platform_set = set(platforms) if platforms else None
+    status_set = set(statuses) if statuses else None
+    q_lower = q.strip().lower() if q else None
+
     def _filter(d: Draft) -> bool:
-        if platform and d.platform != platform:
+        if platform_set is not None:
+            if d.platform not in platform_set:
+                return False
+        elif platform and d.platform != platform:
             return False
-        if status and d.status.value != status:
+        if status_set is not None:
+            if d.status.value not in status_set:
+                return False
+        elif status and d.status.value != status:
             return False
+        if q_lower:
+            haystack = f"{d.content}".lower()
+            if q_lower not in haystack:
+                return False
         return True
-    return draft_store.list(filter_fn=_filter)
+    items = draft_store.list(filter_fn=_filter)
+    items.sort(key=lambda d: d.created_at or "", reverse=True)
+    return items
 
 
 @router.get("/drafts/scheduled")

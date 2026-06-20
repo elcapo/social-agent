@@ -9,10 +9,10 @@ from fastapi.testclient import TestClient
 from social_agent.collectors.base import CollectedItem
 from social_agent.config import settings as global_settings
 from social_agent.main import app
-from social_agent.models.draft import Draft
-from social_agent.models.idea import Idea
+from social_agent.models.draft import Draft, DraftStatus
+from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.models.seed import Seed
-from social_agent.models.source import Source
+from social_agent.models.source import Source, SourcePriority, SourceType
 from social_agent.storage.markdown_store import MarkdownStore
 
 MOCK_IDEAS_JSON = """{"title": "Generated Idea", "summary": "Idea summary from LLM"}"""
@@ -159,6 +159,73 @@ class TestSourcesAPI:
         })
         assert resp.status_code == 201
         assert resp.json()["source_type"] == "link_scraper"
+
+    def test_list_sources_sorted_newest_first(self, client):
+        import social_agent.api.router_sources as rs
+        old = Source(
+            id="src_a", name="Old Source", source_type=SourceType.rss,
+            url="https://old.example.com", priority=SourcePriority.medium,
+            created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        )
+        new = Source(
+            id="src_z", name="New Source", source_type=SourceType.rss,
+            url="https://new.example.com", priority=SourcePriority.medium,
+            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        rs.source_store.save(old)
+        rs.source_store.save(new)
+        data = client.get("/api/sources").json()
+        assert data[0]["id"] == "src_z"
+        assert data[1]["id"] == "src_a"
+
+    def test_list_sources_filter_by_source_type(self, client):
+        import social_agent.api.router_sources as rs
+        rs.source_store.save(Source(id="s1", name="RSS", source_type=SourceType.rss, url="https://a.com"))
+        rs.source_store.save(Source(id="s2", name="Web", source_type=SourceType.webpage, url="https://b.com"))
+        resp = client.get("/api/sources", params={"source_type": "rss"})
+        assert resp.status_code == 200
+        names = {s["name"] for s in resp.json()}
+        assert names == {"RSS"}
+
+    def test_list_sources_filter_by_source_types_multiple(self, client):
+        import social_agent.api.router_sources as rs
+        rs.source_store.save(Source(id="s1", name="RSS", source_type=SourceType.rss, url="https://a.com"))
+        rs.source_store.save(Source(id="s2", name="Web", source_type=SourceType.webpage, url="https://b.com"))
+        rs.source_store.save(Source(id="s3", name="Man", source_type=SourceType.manual, url="https://c.com"))
+        resp = client.get("/api/sources", params={"source_types": ["rss", "manual"]})
+        names = {s["name"] for s in resp.json()}
+        assert names == {"RSS", "Man"}
+
+    def test_list_sources_filter_by_keyword_in_name(self, client):
+        import social_agent.api.router_sources as rs
+        rs.source_store.save(Source(id="s1", name="AI News", source_type=SourceType.rss, url="https://ai.example.com"))
+        rs.source_store.save(Source(id="s2", name="Cooking", source_type=SourceType.rss, url="https://food.example.com"))
+        resp = client.get("/api/sources", params={"q": "ai"})
+        assert resp.status_code == 200
+        names = {s["name"] for s in resp.json()}
+        assert "AI News" in names
+        assert "Cooking" not in names
+
+    def test_list_sources_filter_by_keyword_in_tags(self, client):
+        import social_agent.api.router_sources as rs
+        s1 = Source(id="s1", name="News", source_type=SourceType.rss,
+                    url="https://x.com", tags=["python", "ai"])
+        rs.source_store.save(s1)
+        rs.source_store.save(Source(id="s2", name="Other", source_type=SourceType.rss, url="https://y.com"))
+        resp = client.get("/api/sources", params={"q": "python"})
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["name"] == "News"
+
+    def test_list_sources_filter_by_enabled(self, client):
+        import social_agent.api.router_sources as rs
+        rs.source_store.save(Source(id="s1", name="On", source_type=SourceType.rss,
+                                    url="https://on.com", enabled=True))
+        rs.source_store.save(Source(id="s2", name="Off", source_type=SourceType.rss,
+                                    url="https://off.com", enabled=False))
+        enabled = client.get("/api/sources", params={"enabled": "true"})
+        assert {s["name"] for s in enabled.json()} == {"On"}
+        disabled = client.get("/api/sources", params={"enabled": "false"})
+        assert {s["name"] for s in disabled.json()} == {"Off"}
 
 
 # ── Seeds ──
@@ -674,6 +741,60 @@ class TestIdeasAPI:
         get = client.get(f"/api/ideas/{idea['id']}")
         assert get.status_code == 404
 
+    def test_list_ideas_sorted_newest_first(self, client):
+        import social_agent.api.router_ideas as ri
+        ri.idea_store.save(Idea(
+            id="idea_a", seed_id="x", title="Old", summary="old summary",
+            status=IdeaStatus.pending, created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        ))
+        ri.idea_store.save(Idea(
+            id="idea_z", seed_id="x", title="New", summary="new summary",
+            status=IdeaStatus.pending, created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        ))
+        data = client.get("/api/ideas").json()
+        assert data[0]["id"] == "idea_z"
+        assert data[1]["id"] == "idea_a"
+
+    def test_list_ideas_filter_by_status(self, client):
+        import social_agent.api.router_ideas as ri
+        ri.idea_store.save(Idea(id="i1", seed_id="x", title="A", summary="s",
+                                status=IdeaStatus.pending))
+        ri.idea_store.save(Idea(id="i2", seed_id="x", title="B", summary="s",
+                                status=IdeaStatus.discarded))
+        pending = client.get("/api/ideas", params={"status": "pending"})
+        assert len(pending.json()) == 1
+        assert pending.json()[0]["id"] == "i1"
+
+    def test_list_ideas_filter_by_statuses_multiple(self, client):
+        import social_agent.api.router_ideas as ri
+        ri.idea_store.save(Idea(id="i1", seed_id="x", title="A", summary="s",
+                                status=IdeaStatus.pending))
+        ri.idea_store.save(Idea(id="i2", seed_id="x", title="B", summary="s",
+                                status=IdeaStatus.used))
+        ri.idea_store.save(Idea(id="i3", seed_id="x", title="C", summary="s",
+                                status=IdeaStatus.discarded))
+        resp = client.get("/api/ideas", params={"statuses": ["pending", "discarded"]})
+        ids = {i["id"] for i in resp.json()}
+        assert ids == {"i1", "i3"}
+
+    def test_list_ideas_filter_by_keyword_in_title(self, client):
+        import social_agent.api.router_ideas as ri
+        ri.idea_store.save(Idea(id="i1", seed_id="x", title="AI Ethics",
+                                summary="something", status=IdeaStatus.pending))
+        ri.idea_store.save(Idea(id="i2", seed_id="x", title="Cooking",
+                                summary="recipes", status=IdeaStatus.pending))
+        resp = client.get("/api/ideas", params={"q": "ethics"})
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["id"] == "i1"
+
+    def test_list_ideas_filter_by_keyword_in_summary(self, client):
+        import social_agent.api.router_ideas as ri
+        ri.idea_store.save(Idea(id="i1", seed_id="x", title="Future",
+                                summary="machine learning advances",
+                                status=IdeaStatus.pending))
+        resp = client.get("/api/ideas", params={"q": "machine learning"})
+        assert len(resp.json()) == 1
+
 
 # ── Drafts ──
 
@@ -874,6 +995,74 @@ class TestDraftsAPI:
         )
         assert resp.status_code == 201
         assert len(resp.json()["media_paths"]) == 2
+
+    def test_list_drafts_sorted_newest_first(self, client):
+        import social_agent.api.router_drafts as rd
+        rd.draft_store.save(Draft(
+            id="draft_a", idea_id="x", platform="twitter", content="old",
+            status=DraftStatus.draft, created_at=datetime(2020, 1, 1, tzinfo=timezone.utc),
+        ))
+        rd.draft_store.save(Draft(
+            id="draft_z", idea_id="x", platform="twitter", content="new",
+            status=DraftStatus.draft, created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        ))
+        data = client.get("/api/drafts").json()
+        assert data[0]["id"] == "draft_z"
+        assert data[1]["id"] == "draft_a"
+
+    def test_list_drafts_filter_by_status(self, client):
+        import social_agent.api.router_drafts as rd
+        rd.draft_store.save(Draft(id="d1", idea_id="x", platform="twitter",
+                                  content="a", status=DraftStatus.draft))
+        rd.draft_store.save(Draft(id="d2", idea_id="x", platform="twitter",
+                                  content="b", status=DraftStatus.published))
+        resp = client.get("/api/drafts", params={"status": "draft"})
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["id"] == "d1"
+
+    def test_list_drafts_filter_by_statuses_multiple(self, client):
+        import social_agent.api.router_drafts as rd
+        rd.draft_store.save(Draft(id="d1", idea_id="x", platform="twitter",
+                                  content="a", status=DraftStatus.draft))
+        rd.draft_store.save(Draft(id="d2", idea_id="x", platform="twitter",
+                                  content="b", status=DraftStatus.approved))
+        rd.draft_store.save(Draft(id="d3", idea_id="x", platform="twitter",
+                                  content="c", status=DraftStatus.rejected))
+        resp = client.get("/api/drafts", params={"statuses": ["draft", "rejected"]})
+        ids = {d["id"] for d in resp.json()}
+        assert ids == {"d1", "d3"}
+
+    def test_list_drafts_filter_by_platform(self, client):
+        import social_agent.api.router_drafts as rd
+        rd.draft_store.save(Draft(id="d1", idea_id="x", platform="twitter",
+                                  content="a", status=DraftStatus.draft))
+        rd.draft_store.save(Draft(id="d2", idea_id="x", platform="linkedin",
+                                  content="b", status=DraftStatus.draft))
+        resp = client.get("/api/drafts", params={"platform": "twitter"})
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["id"] == "d1"
+
+    def test_list_drafts_filter_by_platforms_multiple(self, client):
+        import social_agent.api.router_drafts as rd
+        rd.draft_store.save(Draft(id="d1", idea_id="x", platform="twitter",
+                                  content="a", status=DraftStatus.draft))
+        rd.draft_store.save(Draft(id="d2", idea_id="x", platform="linkedin",
+                                  content="b", status=DraftStatus.draft))
+        rd.draft_store.save(Draft(id="d3", idea_id="x", platform="mastodon",
+                                  content="c", status=DraftStatus.draft))
+        resp = client.get("/api/drafts", params={"platforms": ["twitter", "linkedin"]})
+        ids = {d["id"] for d in resp.json()}
+        assert ids == {"d1", "d2"}
+
+    def test_list_drafts_filter_by_keyword(self, client):
+        import social_agent.api.router_drafts as rd
+        rd.draft_store.save(Draft(id="d1", idea_id="x", platform="twitter",
+                                  content="discussion about AI", status=DraftStatus.draft))
+        rd.draft_store.save(Draft(id="d2", idea_id="x", platform="twitter",
+                                  content="cooking tips", status=DraftStatus.draft))
+        resp = client.get("/api/drafts", params={"q": "ai"})
+        assert len(resp.json()) == 1
+        assert resp.json()[0]["id"] == "d1"
 
 
 # ── Publish ──

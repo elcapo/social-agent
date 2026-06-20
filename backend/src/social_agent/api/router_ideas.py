@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from social_agent.agents.ideator import IdeatorAgent
@@ -37,10 +37,24 @@ class UpdateIdeaRequest(BaseModel):
 
 
 @router.get("/ideas")
-def list_ideas(status: Optional[str] = None) -> list[Idea]:
+def list_ideas(
+    status: Optional[str] = None,
+    statuses: Optional[list[str]] = Query(default=None),
+    q: Optional[str] = None,
+) -> list[Idea]:
+    status_set = set(statuses) if statuses else None
+    q_lower = q.strip().lower() if q else None
+
     def _filter(i: Idea) -> bool:
-        if status and i.status.value != status:
+        if status_set is not None:
+            if i.status.value not in status_set:
+                return False
+        elif status and i.status.value != status:
             return False
+        if q_lower:
+            haystack = f"{i.title} {i.summary}".lower()
+            if q_lower not in haystack:
+                return False
         return True
     items = idea_store.list(filter_fn=_filter)
     items.sort(key=lambda i: i.created_at or "", reverse=True)

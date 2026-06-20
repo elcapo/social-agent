@@ -12,6 +12,19 @@ import Nav from "../components/Nav.astro";
     </div>
 
     <div id="error-msg" class="alert alert-error mb-4 hidden"></div>
+
+    <div id="filters-bar" class="flex items-center gap-2 flex-wrap mb-4">
+      <details class="dropdown">
+        <summary class="btn btn-sm btn-outline">+ Add filter</summary>
+        <ul class="dropdown-content menu bg-base-100 border border-base-300 rounded-box z-10 w-44 p-2 shadow-sm">
+          <li><button data-add-filter="type">Type</button></li>
+          <li><button data-add-filter="keyword">Keyword</button></li>
+          <li><button data-add-filter="enabled">Enabled</button></li>
+        </ul>
+      </details>
+      <div id="active-filters" class="flex items-center gap-2 flex-wrap"></div>
+    </div>
+
     <div id="sources-list"><span class="loading loading-spinner loading-sm"></span> <span class="text-sm text-base-content/40">Loading...</span></div>
   </main>
 
@@ -80,7 +93,12 @@ import Nav from "../components/Nav.astro";
 
     async function load() {
       hideError();
-      const res = await fetch(`${API}/sources`);
+      const params = new URLSearchParams();
+      (filters.types || []).forEach(t => params.append("source_types", t));
+      if (filters.q) params.set("q", filters.q);
+      if (filters.enabled !== null) params.set("enabled", String(filters.enabled));
+      const qs = params.toString();
+      const res = await fetch(`${API}/sources${qs ? "?" + qs : ""}`);
       const sources = await res.json();
       const container = document.getElementById("sources-list");
 
@@ -96,6 +114,7 @@ import Nav from "../components/Nav.astro";
               <div class="flex items-center gap-2 min-w-0 flex-1">
                 <span class="font-medium">${esc(s.name)}</span>
                 <span class="badge badge-sm badge-soft shrink-0">${esc(s.source_type)}</span>
+                ${s.enabled === false ? '<span class="badge badge-sm badge-soft badge-error shrink-0">disabled</span>' : ""}
               </div>
               <span class="badge badge-sm badge-ghost shrink-0">${s.priority}</span>
               <div class="flex gap-1 shrink-0">
@@ -118,6 +137,7 @@ import Nav from "../components/Nav.astro";
                 ${(s.tags || []).map(t => `<span class="badge badge-sm badge-soft badge-primary">${esc(t)}</span>`).join("")}
               </div>
             </div>
+            <div class="text-xs text-base-content/40">${s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}</div>
           </li>`).join("")}
       </ul>`;
     }
@@ -224,6 +244,126 @@ import Nav from "../components/Nav.astro";
         btn.disabled = false;
         btn.textContent = original;
       }
+    });
+
+    // ── Filters ──
+
+    const ALL_TYPES = ["rss", "webpage", "link_scraper", "social", "manual"];
+
+    const filters = { types: [], q: "", enabled: null };
+    const activeTypes = new Set();
+
+    function escAttr(str) {
+      return esc(str).replace(/"/g, "&quot;");
+    }
+
+    function renderFilters() {
+      const container = document.getElementById("active-filters");
+      container.innerHTML = "";
+
+      if (activeTypes.has("type")) {
+        const checked = new Set(filters.types);
+        const checkboxes = ALL_TYPES.map(t => `
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-xs" data-type="${t}" ${checked.has(t) ? "checked" : ""} />
+            <span class="badge badge-sm badge-soft">${t}</span>
+          </label>`).join("");
+        container.innerHTML += `
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Type</span>
+            <div class="flex items-center gap-1.5 flex-wrap">${checkboxes}</div>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="type" aria-label="Remove type filter">✕</button>
+          </div>`;
+      }
+
+      if (activeTypes.has("keyword")) {
+        container.innerHTML += `
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Keyword</span>
+            <input type="text" class="input input-xs w-40" id="filter-q" placeholder="search name, url, tags" value="${escAttr(filters.q)}" />
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="keyword" aria-label="Remove keyword filter">✕</button>
+          </div>`;
+      }
+
+      if (activeTypes.has("enabled")) {
+        const cur = filters.enabled === null ? "all" : filters.enabled ? "enabled" : "disabled";
+        container.innerHTML += `
+          <div class="flex items-center gap-2 px-3 py-1.5 bg-base-200 rounded-full">
+            <span class="text-xs font-medium text-base-content/60">Enabled</span>
+            <select class="select select-xs" id="filter-enabled">
+              <option value="all" ${cur === "all" ? "selected" : ""}>All</option>
+              <option value="enabled" ${cur === "enabled" ? "selected" : ""}>Enabled</option>
+              <option value="disabled" ${cur === "disabled" ? "selected" : ""}>Disabled</option>
+            </select>
+            <button class="btn btn-ghost btn-xs btn-circle" data-remove-filter="enabled" aria-label="Remove enabled filter">✕</button>
+          </div>`;
+      }
+
+      updateAddFilterMenu();
+      bindFilterEvents();
+    }
+
+    function updateAddFilterMenu() {
+      document.querySelectorAll("[data-add-filter]").forEach(btn => {
+        const type = btn.dataset.addFilter;
+        const li = btn.closest("li");
+        if (activeTypes.has(type)) {
+          li.classList.add("hidden");
+        } else {
+          li.classList.remove("hidden");
+        }
+      });
+    }
+
+    function bindFilterEvents() {
+      document.querySelectorAll("[data-remove-filter]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const type = btn.dataset.removeFilter;
+          activeTypes.delete(type);
+          if (type === "type") filters.types = [];
+          if (type === "keyword") filters.q = "";
+          if (type === "enabled") filters.enabled = null;
+          renderFilters();
+          load();
+        });
+      });
+
+      document.querySelectorAll("[data-type]").forEach(cb => {
+        cb.addEventListener("change", () => {
+          filters.types = Array.from(document.querySelectorAll("[data-type]:checked")).map(el => el.dataset.type);
+          load();
+        });
+      });
+
+      const qInput = document.getElementById("filter-q");
+      if (qInput) {
+        qInput.addEventListener("input", () => {
+          filters.q = qInput.value;
+          clearTimeout(qInput._t);
+          qInput._t = setTimeout(load, 300);
+        });
+      }
+
+      const enabledSelect = document.getElementById("filter-enabled");
+      if (enabledSelect) {
+        enabledSelect.addEventListener("change", () => {
+          const v = enabledSelect.value;
+          filters.enabled = v === "all" ? null : v === "enabled";
+          load();
+        });
+      }
+    }
+
+    document.querySelectorAll("[data-add-filter]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const type = btn.dataset.addFilter;
+        if (activeTypes.has(type)) return;
+        activeTypes.add(type);
+        const dropdown = btn.closest("details");
+        if (dropdown) dropdown.open = false;
+        renderFilters();
+        load();
+      });
     });
 
     load();

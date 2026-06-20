@@ -440,3 +440,75 @@ individual.
 - [x] 13.3 — CLI `seeds add <url>` con `--no-scrape`, `--title`, `--content`, `--tags`, `--renderer`
 - [x] 13.4 — Frontend: botón "Add article" + modal con fetch + campos editables
 - [x] 13.5 — Tests: 348 tests totales, todos pasan (18 nuevos)
+
+---
+
+## Fase 14 — Ordenación por recencia y filtros en todas las pantallas
+
+### Contexto
+
+Las cuatro pantallas de listado (sources, seeds, ideas, drafts) presentaban
+inconsistencias: `sources` y `drafts` no ordenaban por `created_at` (el
+`MarkdownStore.list()` devuelve los archivos ordenados por nombre, que no
+coincide con el orden cronológico), y solo `seeds` disponía de barra de filtros
+en la UI. Las demás pantallas solo aceptaban `?status=` vía URL, sin interfaz
+de filtrado interactivo.
+
+### Plan de implementación
+
+#### 14.1 Ordenación por `created_at` descendente (backend)
+
+- `router_sources.py`: `items.sort(key=lambda s: s.created_at or "", reverse=True)`
+  tras `source_store.list()`
+- `router_drafts.py`: `items.sort(key=lambda d: d.created_at or "", reverse=True)`
+  tras `draft_store.list()`
+- `router_ideas.py` y `router_seeds.py`: ya ordenaban — sin cambios
+- Patrón aplicado a nivel de router (funciona con backends markdown y SQLite,
+  ambos exponen `list(filter_fn=None)` con la misma firma)
+
+#### 14.2 Filtros de búsqueda (backend)
+
+- `GET /sources`: `source_types` (multi, además del `source_type` single
+  existente), `q` (busca en name + url + tags), `enabled` (bool)
+- `GET /ideas`: `statuses` (multi, además de `status` single), `q` (busca en
+  title + summary)
+- `GET /drafts`: `statuses` (multi) y `platforms` (multi, además de `platform`/
+  `status` single existentes), `q` (busca en content)
+- Todos los filtros son case-insensitive y combinables
+
+#### 14.3 Barra de filtros en la UI (frontend)
+
+- Replicar el sistema de chips "+ Add filter" de `seeds.astro` en `sources`,
+  `ideas` y `drafts`:
+  - **sources**: Type (checkboxes rss/webpage/link_scraper/social/manual),
+    Keyword, Enabled (select All/Enabled/Disabled)
+  - **ideas**: Status (checkboxes pending/used/discarded), Keyword
+  - **drafts**: Status (checkboxes draft/approved/rejected/published/failed),
+    Platform (checkboxes twitter/linkedin), Keyword
+- Inputs de texto con debounce de 300ms
+- Preservar deep-links del dashboard: `?status=` en ideas/drafts siembra el
+  estado de filtros al cargar (compatibilidad con `index.astro`)
+
+#### 14.4 Fecha de creación visible en sources
+
+- `sources.astro` no mostraba `created_at`; se añade para que el orden
+  "reciente arriba" sea verificable visualmente (igual que seeds/ideas/drafts)
+- Badge "disabled" cuando `enabled === false`
+
+#### 14.5 Tests
+
+- `TestSourcesAPI`: orden + 5 filtros (source_type, source_types, q en name,
+  q en tags, enabled)
+- `TestIdeasAPI`: orden + 4 filtros (status, statuses, q en title, q en summary)
+- `TestDraftsAPI`: orden + 5 filtros (status, statuses, platform, platforms, q)
+- Tests de ordenación usan IDs con orden alfabético inverso al cronológico
+  (p. ej. `src_a`=2020, `src_z`=2025) para verificar que el sort revierte el
+  orden de archivos
+
+### Fase 14 — Ordenación por recencia y filtros en todas las pantallas
+
+- [x] 14.1 — `router_sources` y `router_drafts` ordenan por `created_at` desc
+- [x] 14.2 — Filtros `q`/`statuses`/`source_types`/`platforms`/`enabled` en backend
+- [x] 14.3 — Barra de filtros en sources, ideas y drafts (chips "+ Add filter")
+- [x] 14.4 — `created_at` visible en `sources.astro` + badge "disabled"
+- [x] 14.5 — Tests: 365 tests totales, todos pasan (17 nuevos); build frontend OK

@@ -16,12 +16,32 @@ router = APIRouter(tags=["sources"])
 
 
 @router.get("/sources")
-def list_sources(source_type: Optional[str] = None) -> list[Source]:
+def list_sources(
+    source_type: Optional[str] = None,
+    source_types: Optional[list[str]] = Query(default=None),
+    q: Optional[str] = None,
+    enabled: Optional[bool] = None,
+) -> list[Source]:
+    type_set = set(source_types) if source_types else None
+    q_lower = q.strip().lower() if q else None
+
     def _filter(s: Source) -> bool:
-        if source_type and s.source_type.value != source_type:
+        if type_set is not None:
+            if s.source_type.value not in type_set:
+                return False
+        elif source_type and s.source_type.value != source_type:
             return False
+        if enabled is not None and s.enabled != enabled:
+            return False
+        if q_lower:
+            haystack = f"{s.name} {s.url} {' '.join(s.tags or [])}".lower()
+            if q_lower not in haystack:
+                return False
         return True
-    return source_store.list(filter_fn=_filter)
+
+    items = source_store.list(filter_fn=_filter)
+    items.sort(key=lambda s: s.created_at or "", reverse=True)
+    return items
 
 
 @router.post("/sources", status_code=201)
