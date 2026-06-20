@@ -39,6 +39,10 @@ import Nav from "../../components/Nav.astro";
         <label class="label">Summary</label>
         <textarea id="idea-summary" class="textarea w-full" rows="8" placeholder="Idea summary..."></textarea>
 
+        <label class="label">Comentario (para el escritor)</label>
+        <textarea id="idea-comment" class="textarea w-full" rows="4" placeholder="Contexto o instrucciones para el agente escritor, separadas del resumen de la noticia. Ej: &quot;empieza narrando la publicación del modelo e indicando que es de pesos abiertos&quot;"></textarea>
+        <div class="text-xs text-base-content/40 mt-1">Se incluirá en el prompt del escritor como "Comentario del autor", distinguido del resumen de la noticia.</div>
+
         <label class="label">Seed ID</label>
         <input type="text" id="idea-seed-id" class="input w-full" disabled />
 
@@ -75,7 +79,7 @@ import Nav from "../../components/Nav.astro";
     const readonlyNotice = document.getElementById("readonly-notice");
     const readonlyMsg = document.getElementById("readonly-msg");
     const btnSave = document.getElementById("btn-save");
-    const editableInputs = ["idea-title", "idea-summary"].map(id => document.getElementById(id));
+    const editableInputs = ["idea-title", "idea-summary", "idea-comment"].map(id => document.getElementById(id));
 
     const READONLY_STATUSES = ["used", "discarded"];
 
@@ -141,6 +145,7 @@ import Nav from "../../components/Nav.astro";
       document.getElementById("idea-status-display").innerHTML = setStatusBadge(idea.status);
       document.getElementById("idea-title").value = idea.title;
       document.getElementById("idea-summary").value = idea.summary || "";
+      document.getElementById("idea-comment").value = idea.comment || "";
       document.getElementById("idea-seed-id").value = idea.seed_id || "";
       document.getElementById("idea-source-url").value = idea.source_url || "";
       document.getElementById("idea-created").textContent = idea.created_at ? new Date(idea.created_at).toLocaleString() : "—";
@@ -156,6 +161,7 @@ import Nav from "../../components/Nav.astro";
     btnSave.addEventListener("click", async () => {
       const title = document.getElementById("idea-title").value.trim();
       const summary = document.getElementById("idea-summary").value.trim();
+      const comment = document.getElementById("idea-comment").value;
 
       if (!title) { showError("Title is required."); return; }
 
@@ -164,7 +170,7 @@ import Nav from "../../components/Nav.astro";
       hideAll();
 
       try {
-        const body = { title, summary };
+        const body = { title, summary, comment };
         const res = await fetch(`${API}/ideas/${ideaId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

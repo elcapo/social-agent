@@ -143,6 +143,44 @@ class TestIdea:
         idea = Idea(seed_id="s1", title="New", summary="New")
         assert idea.id.startswith("idea_")
 
+    def test_idea_comment_default_none(self):
+        idea = Idea(seed_id="s1", title="New", summary="New")
+        assert idea.comment is None
+
+    def test_idea_comment_roundtrip(self):
+        idea = Idea(
+            seed_id="seed_123",
+            title="With Comment",
+            summary="Summary here",
+            comment="estaré probando este modelo esta semana",
+            source_url="https://example.com",
+            status=IdeaStatus.pending,
+        )
+        fm = idea.to_frontmatter()
+        assert fm["comment"] == "estaré probando este modelo esta semana"
+        restored = Idea.from_frontmatter(fm)
+        assert restored.comment == idea.comment
+
+    def test_idea_comment_none_roundtrip(self):
+        idea = Idea(seed_id="s1", title="No Comment", summary="S")
+        fm = idea.to_frontmatter()
+        assert fm["comment"] is None
+        restored = Idea.from_frontmatter(fm)
+        assert restored.comment is None
+
+    def test_idea_without_comment_key_loads_with_default(self):
+        fm = {
+            "id": "idea_x",
+            "seed_id": "s1",
+            "title": "Legacy",
+            "summary": "S",
+            "source_url": None,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        restored = Idea.from_frontmatter(fm)
+        assert restored.comment is None
+
 
 class TestDraft:
     def test_create_draft(self):

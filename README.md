@@ -145,9 +145,38 @@ uv run ruff check backend/src/ tests/
 source .venv/bin/activate
 ```
 
+### Migraciones de base de datos (Alembic)
+
+El backend SQLite usa [Alembic](https://alembic.sqlalchemy.org/) para el control
+de versiones del esquema. Las migraciones viven en `backend/alembic/versions/`.
+
+```bash
+# Aplicar todas las migraciones pendientes
+cd backend && alembic upgrade head
+
+# Revertir la última migración
+cd backend && alembic downgrade -1
+
+# Generar una migración a partir de cambios en los modelos ORM (db.py)
+cd backend && alembic revision --autogenerate -m "descripción del cambio"
+```
+
+> **Nota sobre la ruta de la base de datos:** `settings.data_dir` es relativa al
+> CWD, por lo que `alembic` ejecutado desde `backend/` resuelve la DB a
+> `backend/data/social_agent.db` en vez de `data/social_agent.db` (raíz del
+> proyecto). Si tu DB con datos está en la raíz, apunta a ella explícitamente:
+>
+> ```bash
+> cd backend && SOCIAL_AGENT_SQLITE_PATH=$(pwd)/../data/social_agent.db alembic upgrade head
+> ```
+>
+> Alternativamente, ejecuta `alembic` desde la raíz del proyecto. Sin este
+> ajuste, `upgrade head` no informará error pero actuará sobre una DB vacía y la
+> migración no se aplicará a tus datos reales.
+
 ## Uso básico
 
-El flujo de trabajo tiene tres etapas: **fuentes** → **semillas** → **drafts**.
+El flujo de trabajo tiene cuatro etapas: **fuentes** → **semillas** → **ideas** → **drafts**.
 
 ### Fuentes (`sources`)
 
@@ -186,6 +215,39 @@ social-agent seeds show <seed_id>
 # Descartar una semilla
 social-agent seeds discard <seed_id>
 ```
+
+### Ideas (`ideas`)
+
+Las ideas son el paso intermedio entre las semillas y los borradores: el *agente
+ideador* produce, a partir de una semilla aprobada, un `title` y un `summary`
+fiel al artículo original. Sobre esa idea puedes añadir un **comentario** del
+autor que se enviará al *agente escritor* **separado del resumen de la noticia**,
+para aportar contexto personal o instrucciones de enfoque (p. ej. "empieza
+narrando la publicación del modelo e indicando que es de pesos abiertos").
+
+```bash
+# Generar una idea a partir de una semilla aprobada
+social-agent ideas generate <seed_id>
+
+# Listar ideas
+social-agent ideas list
+social-agent ideas list --status pending
+
+# Ver el detalle de una idea (incluye el comentario si lo tiene)
+social-agent ideas show <idea_id>
+
+# Fijar un comentario para el escritor
+social-agent ideas comment <idea_id> "estaré probando este modelo esta semana"
+
+# Eliminar el comentario
+social-agent ideas comment <idea_id> --clear
+
+# Descartar una idea
+social-agent ideas discard <idea_id>
+```
+
+El comentario también puede editarse desde el frontend (página de edición de la
+idea) o vía API con `PATCH /api/ideas/{id}` enviando `{"comment": "..."}`.
 
 ### Drafts (`drafts`)
 
@@ -316,6 +378,11 @@ La API está documentada automáticamente con OpenAPI:
 | `GET` | `/api/seeds/{id}` | Obtener semilla |
 | `POST` | `/api/seeds/generate` | Generar semillas desde fuentes |
 | `PATCH` | `/api/seeds/{id}` | Actualizar semilla |
+| `GET` | `/api/ideas` | Listar ideas (`?status=pending`) |
+| `GET` | `/api/ideas/{id}` | Obtener idea (incluye `comment`) |
+| `POST` | `/api/ideas/generate` | Generar idea desde una semilla aprobada |
+| `PATCH` | `/api/ideas/{id}` | Actualizar idea (estado, título, resumen, **comentario**) |
+| `DELETE` | `/api/ideas/{id}` | Eliminar idea |
 | `GET` | `/api/drafts` | Listar borradores (`?platform=twitter&status=approved`) |
 | `GET` | `/api/drafts/scheduled` | Listar borradores programados |
 | `GET` | `/api/drafts/{id}` | Obtener borrador |
@@ -343,10 +410,20 @@ curl -X POST http://localhost:8000/api/seeds/generate \
   -H "Content-Type: application/json" \
   -d '{"interests": "rust, systems programming"}'
 
-# Generar drafts (requiere semilla existente)
+# Generar una idea desde una semilla aprobada
+curl -X POST http://localhost:8000/api/ideas/generate \
+  -H "Content-Type: application/json" \
+  -d '{"seed_id": "seed_123", "interests": "rust, systems programming"}'
+
+# Añadir un comentario del autor a una idea (lo recibe el agente escritor)
+curl -X PATCH http://localhost:8000/api/ideas/idea_123 \
+  -H "Content-Type: application/json" \
+  -d '{"comment": "estaré probando este modelo esta semana, publicaré actualizaciones"}'
+
+# Generar drafts (requiere idea existente)
 curl -X POST http://localhost:8000/api/drafts/generate \
   -H "Content-Type: application/json" \
-  -d '{"seed_id": "seed_123", "platforms": ["twitter", "linkedin"]}'
+  -d '{"idea_id": "idea_123", "platforms": ["twitter", "linkedin"]}'
 
 # Aprobar draft
 curl -X PATCH http://localhost:8000/api/drafts/draft_123 \

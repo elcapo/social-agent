@@ -264,6 +264,7 @@ class SqlAlchemyIdeaRepository:
         row.seed_id = model.seed_id
         row.title = model.title
         row.summary = model.summary
+        row.comment = model.comment
         row.source_url = model.source_url
         row.status = model.status.value
         row.created_at = model.created_at
@@ -276,6 +277,7 @@ class SqlAlchemyIdeaRepository:
             seed_id=row.seed_id,
             title=row.title,
             summary=row.summary,
+            comment=row.comment,
             source_url=row.source_url,
             status=IdeaStatus(row.status),
             created_at=_ensure_utc(row.created_at),

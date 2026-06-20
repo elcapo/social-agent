@@ -363,6 +363,43 @@ def ideas_show(idea_id: str) -> None:
     click.echo(f"Status:    {idea.status.value}")
     click.echo(f"Source:    {idea.source_url or '(none)'}")
     click.echo(f"Summary:   {idea.summary}")
+    if idea.comment:
+        click.echo(f"Comment:   {idea.comment}")
+
+
+@ideas.command("comment")
+@click.argument("idea_id")
+@click.argument("text", required=False)
+@click.option("--clear", is_flag=True, help="Eliminar el comentario")
+def ideas_comment(idea_id: str, text: str | None, clear: bool) -> None:
+    """Fija o elimina el comentario del autor en una idea.
+
+    El comentario se incluye en el prompt del agente escritor, separado del
+    resumen de la noticia, para aportar contexto o instrucciones de enfoque.
+
+    Ejemplos:
+
+      social-agent ideas comment idea_123 "estaré probando este modelo esta semana"
+      social-agent ideas comment idea_123 --clear
+    """
+    idea = idea_store.get(idea_id)
+    if not idea:
+        click.echo(f"Idea '{idea_id}' not found.")
+        return
+
+    if clear:
+        idea.comment = None
+        idea_store.save(idea)
+        click.echo(f"Comment cleared from idea '{idea_id}'.")
+        return
+
+    if not text:
+        click.echo("Provide the comment text or use --clear to remove it.")
+        return
+
+    idea.comment = text
+    idea_store.save(idea)
+    click.echo(f"Comment set on idea '{idea_id}'.")
 
 
 @ideas.command("discard")

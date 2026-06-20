@@ -22,6 +22,7 @@ class Idea(BaseModel):
     seed_id: str
     title: str
     summary: str
+    comment: Optional[str] = None
     source_url: Optional[str] = None
     status: IdeaStatus = IdeaStatus.pending
     created_at: datetime = Field(default_factory=_utcnow)
@@ -32,6 +33,7 @@ class Idea(BaseModel):
             "seed_id": self.seed_id,
             "title": self.title,
             "summary": self.summary,
+            "comment": self.comment,
             "source_url": self.source_url,
             "status": self.status.value,
             "created_at": self.created_at.isoformat(),

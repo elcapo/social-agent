@@ -310,6 +310,35 @@ class TestSqlAlchemyIdeaRepository:
         assert idea_repo.get(sample_idea.id).status == IdeaStatus.used
         assert idea_repo.count() == 1
 
+    def test_comment_roundtrip(self, idea_repo):
+        idea = Idea(
+            seed_id="seed_abc",
+            title="T",
+            summary="S",
+            comment="contexto del autor para el escritor",
+            status=IdeaStatus.pending,
+        )
+        idea_repo.save(idea)
+        got = idea_repo.get(idea.id)
+        assert got is not None
+        assert got.comment == "contexto del autor para el escritor"
+
+    def test_comment_defaults_none(self, idea_repo, sample_idea):
+        assert sample_idea.comment is None
+        idea_repo.save(sample_idea)
+        got = idea_repo.get(sample_idea.id)
+        assert got is not None
+        assert got.comment is None
+
+    def test_comment_update_persists(self, idea_repo, sample_idea):
+        idea_repo.save(sample_idea)
+        sample_idea.comment = "nueva nota del autor"
+        idea_repo.save(sample_idea)
+        assert idea_repo.get(sample_idea.id).comment == "nueva nota del autor"
+        sample_idea.comment = None
+        idea_repo.save(sample_idea)
+        assert idea_repo.get(sample_idea.id).comment is None
+
     def test_delete(self, idea_repo, sample_idea):
         idea_repo.save(sample_idea)
         assert idea_repo.delete(sample_idea.id) is True

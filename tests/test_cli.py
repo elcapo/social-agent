@@ -9,6 +9,7 @@ from click.testing import CliRunner
 from social_agent.cli.commands import cli
 from social_agent.config import settings as global_settings
 from social_agent.models.draft import Draft, DraftStatus
+from social_agent.models.idea import Idea
 from social_agent.storage.markdown_store import MarkdownStore
 
 
@@ -16,6 +17,13 @@ from social_agent.storage.markdown_store import MarkdownStore
 def cli_draft_store(tmp_path: Path) -> MarkdownStore[Draft]:
     store = MarkdownStore[Draft](tmp_path / "drafts", Draft)
     with patch("social_agent.cli.commands.draft_store", store):
+        yield store
+
+
+@pytest.fixture
+def cli_idea_store(tmp_path: Path) -> MarkdownStore[Idea]:
+    store = MarkdownStore[Idea](tmp_path / "ideas", Idea)
+    with patch("social_agent.cli.commands.idea_store", store):
         yield store
 
 
@@ -30,6 +38,14 @@ def _make_draft(store: MarkdownStore[Draft], **kwargs) -> Draft:
     draft = Draft(**defaults)
     store.save(draft)
     return draft
+
+
+def _make_idea(store: MarkdownStore[Idea], **kwargs) -> Idea:
+    defaults = dict(seed_id="seed_1", title="My Idea", summary="A summary")
+    defaults.update(kwargs)
+    idea = Idea(**defaults)
+    store.save(idea)
+    return idea
 
 
 class TestScheduleSet:
@@ -200,3 +216,61 @@ class TestSchedulePublish:
         assert result.exit_code == 0
         assert "No drafts due" in result.output
         assert cli_draft_store.get(draft.id).status == DraftStatus.draft
+
+
+class TestIdeasComment:
+    def test_set_comment(self, runner, cli_idea_store):
+        idea = _make_idea(cli_idea_store)
+        result = runner.invoke(
+            cli,
+            ["ideas", "comment", idea.id, "estaré probando este modelo esta semana"],
+        )
+        assert result.exit_code == 0
+        assert "Comment set" in result.output
+        restored = cli_idea_store.get(idea.id)
+        assert restored.comment == "estaré probando este modelo esta semana"
+
+    def test_clear_comment(self, runner, cli_idea_store):
+        idea = _make_idea(cli_idea_store, comment="comentario previo")
+        result = runner.invoke(
+            cli,
+            ["ideas", "comment", idea.id, "--clear"],
+        )
+        assert result.exit_code == 0
+        assert "cleared" in result.output
+        restored = cli_idea_store.get(idea.id)
+        assert restored.comment is None
+
+    def test_comment_without_text_or_clear_errors(self, runner, cli_idea_store):
+        idea = _make_idea(cli_idea_store)
+        result = runner.invoke(
+            cli,
+            ["ideas", "comment", idea.id],
+        )
+        assert result.exit_code == 0
+        assert "Provide the comment text" in result.output
+        restored = cli_idea_store.get(idea.id)
+        assert restored.comment is None
+
+    def test_comment_not_found(self, runner, cli_idea_store):
+        result = runner.invoke(
+            cli,
+            ["ideas", "comment", "nonexistent", "texto"],
+        )
+        assert result.exit_code == 0
+        assert "not found" in result.output
+
+
+class TestIdeasShow:
+    def test_show_with_comment(self, runner, cli_idea_store):
+        idea = _make_idea(cli_idea_store, comment="notas del autor")
+        result = runner.invoke(cli, ["ideas", "show", idea.id])
+        assert result.exit_code == 0
+        assert "notas del autor" in result.output
+        assert "Comment:" in result.output
+
+    def test_show_without_comment(self, runner, cli_idea_store):
+        idea = _make_idea(cli_idea_store)
+        result = runner.invoke(cli, ["ideas", "show", idea.id])
+        assert result.exit_code == 0
+        assert "Comment:" not in result.output

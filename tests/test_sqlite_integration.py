@@ -295,6 +295,22 @@ class TestIdeasSQLiteAPI:
         assert resp.status_code == 200
         assert resp.json()["title"] == "New Title"
 
+    def test_update_idea_comment(self, client, sqlite_backends):
+        from social_agent.models.idea import Idea, IdeaStatus
+
+        sqlite_backends["ideas"].save(
+            Idea(seed_id="s", title="T", summary="S", status=IdeaStatus.pending)
+        )
+        iid = sqlite_backends["ideas"].list()[0].id
+        resp = client.patch(
+            f"/api/ideas/{iid}",
+            json={"comment": "instrucción para el escritor"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["comment"] == "instrucción para el escritor"
+        got = client.get(f"/api/ideas/{iid}")
+        assert got.json()["comment"] == "instrucción para el escritor"
+
     def test_delete_idea(self, client, sqlite_backends):
         from social_agent.models.idea import Idea
 

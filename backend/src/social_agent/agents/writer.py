@@ -16,7 +16,16 @@ Reglas:
 - Responde SIEMPRE en JSON con el campo "post" que contenga únicamente el contenido del post.
 - No incluyas ningún otro texto fuera del JSON.
 - Sigue al pie de la letra las instrucciones de tono y estilo de la plataforma.
-- No añadas hashtags a menos que la plataforma los requiera explícitamente."""
+- No añadas hashtags a menos que la plataforma los requiera explícitamente.
+
+Distingue siempre entre las dos fuentes de input que puedes recibir:
+- El "Resumen de la noticia" son hechos verificables extraídos fielemente del
+  artículo original por el ideator. Trátalos como datos: no los adornes ni
+  inventes detalles.
+- El "Comentario del autor" es la voz del usuario: contexto personal,
+  opiniones o instrucciones de enfoque (p. ej. "empieza narrando la publicación
+  del modelo"). Intégralo en el tono y enfoque del post, pero no presentes las
+  opiniones del usuario como hechos de la noticia."""
 
 
 _URL_RE = re.compile(r'https?://[^\s]+')
@@ -67,8 +76,19 @@ class WriterAgent(BaseAgent):
         user_prompt = (
             f"## Idea\n\n"
             f"Título: {idea.title}\n"
-            f"Resumen: {idea.summary}\n"
+            f"Resumen de la noticia (fiel al artículo original): {idea.summary}\n"
             f"URL original: {url_str}\n\n"
+        )
+
+        comment = (idea.comment or "").strip()
+        if comment:
+            user_prompt += (
+                "## Comentario del autor "
+                "(contexto e instrucciones propias, no parte de la noticia)\n\n"
+                f"{comment}\n\n"
+            )
+
+        user_prompt += (
             f"## Instrucciones de plataforma\n\n"
             f"{platform_instructions}\n\n"
             f"## Tarea\n\n"

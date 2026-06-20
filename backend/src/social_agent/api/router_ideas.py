@@ -33,6 +33,7 @@ class UpdateIdeaRequest(BaseModel):
     status: Optional[str] = None
     title: Optional[str] = None
     summary: Optional[str] = None
+    comment: Optional[str] = None
 
 
 @router.get("/ideas")
@@ -95,6 +96,8 @@ def update_idea(idea_id: str, body: UpdateIdeaRequest) -> Idea:
         idea.title = body.title
     if body.summary is not None:
         idea.summary = body.summary
+    if body.comment is not None:
+        idea.comment = body.comment
 
     idea_store.save(idea)
     return idea

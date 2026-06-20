@@ -306,3 +306,77 @@ Se usa `Protocol` (structural typing) en vez de `ABC` para que `MarkdownStore` c
 |---|---|---|---|
 | Twitter | `POST media/upload` (v1.1) + `media_ids` en create_tweet (v2) | 4 imágenes | PNG, JPEG, GIF, WEBP ≤ 5 MB |
 | LinkedIn | `POST /rest/images` → `PUT` upload URL → incluir URN en post | 1 imagen por post | JPEG, PNG, GIF ≤ 10 MB |
+
+---
+
+## Fase 12 — Campo `comment` en ideas
+
+### Contexto
+
+El pipeline `seed → idea → draft` genera ideas cuyo `summary` es un resumen
+**fiel** del artículo original, producido por el ideator. El usuario necesitaba
+una vía para inyectar contexto personal o instrucciones de enfoque al agente
+escritor (p. ej. "empieza narrando la publicación del modelo e indicando que es
+de pesos abiertos" o "estaré probando este modelo esta semana"), manteniendo la
+distinción clara entre los hechos de la noticia y la voz del autor.
+
+### Plan de implementación
+
+#### 12.1 Extender el modelo `Idea`
+
+- Añadir campo opcional `comment: str | None = None` a `Idea`
+- Incluirlo en `to_frontmatter()` / `from_frontmatter()` (compatible con ideas
+  antiguas sin el campo)
+
+#### 12.2 ORM SQLAlchemy + migración
+
+- Añadir columna `comment` (Text, nullable) a `IdeaORM` en `storage/db.py`
+- Mapear el campo en `SqlAlchemyIdeaRepository._to_orm` / `_to_pydantic`
+- Migración Alembic `e616a71aa7d2_add_idea_comment.py` (add/drop column)
+
+#### 12.3 Writer Agent: separar `summary` y `comment`
+
+- `SYSTEM_PROMPT` ampliado con regla que distingue "Resumen de la noticia"
+  (hechos verificables) de "Comentario del autor" (voz/instrucciones del
+  usuario)
+- `user_prompt` reestructurado en secciones; el bloque "Comentario del autor"
+  solo se incluye si `idea.comment` no está vacío (sin ruido cuando no hay
+  comentario → backward compatible)
+
+#### 12.4 API REST
+
+- `UpdateIdeaRequest` ampliado con `comment: str | None`
+- `PATCH /api/ideas/{id}` gestiona `comment` (permite vaciar con `""`, no
+  sobrescribe si el campo no viene en el body)
+
+#### 12.5 CLI
+
+- `ideas show` muestra `Comment:` si la idea tiene comentario
+- Nuevo comando `ideas comment <id> <texto>` con flag `--clear`
+
+#### 12.6 Frontend (Astro)
+
+- Página de edición de ideas: textarea para el comentario + ayuda contextual
+- Lista de ideas: icono indicador cuando la idea tiene comentario
+
+#### 12.7 Tests
+
+- `test_models.py`: roundtrip del campo `comment`, default `None`, carga de
+  ideas legacy sin la clave
+- `test_writer.py`: inclusión/omisión de la sección "Comentario del autor",
+  distinción posicional summary vs comment
+- `test_api.py`: set/clear/ignorar-missing del comentario
+- `test_repositories_sqlalchemy.py`: roundtrip SQLite + update + clear
+- `test_sqlite_integration.py`: update de comment vía API con backend SQLite
+- `test_cli.py`: `ideas comment` set/clear/error/not-found + `ideas show`
+  con/sin comentario
+
+### Fase 12 — Campo `comment` en ideas
+
+- [x] 12.1 — Modelo `Idea` con `comment: str | None` + frontmatter
+- [x] 12.2 — `IdeaORM.comment` + mapeo en `SqlAlchemyIdeaRepository` + migración Alembic `e616a71aa7d2`
+- [x] 12.3 — `WriterAgent`: `SYSTEM_PROMPT` + `user_prompt` separan "Resumen de la noticia" y "Comentario del autor" (solo si existe)
+- [x] 12.4 — `PATCH /api/ideas/{id}` acepta `comment`; `GET` lo expone
+- [x] 12.5 — CLI `ideas show` muestra el comentario; nuevo `ideas comment <id> <texto>` con `--clear`
+- [x] 12.6 — Frontend: textarea en edición + icono indicador en lista
+- [x] 12.7 — Tests: 330 tests totales, todos pasan (22 nuevos)

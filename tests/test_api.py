@@ -489,6 +489,43 @@ class TestIdeasAPI:
         assert resp.status_code == 200
         assert resp.json()["title"] == "New Title"
 
+    def test_update_idea_comment(self, client):
+        idea = _create_test_idea(client)
+        resp = client.patch(
+            f"/api/ideas/{idea['id']}",
+            json={"comment": "estaré probando este modelo esta semana"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["comment"] == "estaré probando este modelo esta semana"
+        got = client.get(f"/api/ideas/{idea['id']}")
+        assert got.json()["comment"] == "estaré probando este modelo esta semana"
+
+    def test_update_idea_comment_clear(self, client):
+        idea = _create_test_idea(client)
+        client.patch(
+            f"/api/ideas/{idea['id']}",
+            json={"comment": "comentario temporal"},
+        )
+        resp = client.patch(f"/api/ideas/{idea['id']}", json={"comment": ""})
+        assert resp.status_code == 200
+        assert resp.json()["comment"] == ""
+
+    def test_update_idea_ignores_missing_comment(self, client):
+        idea = _create_test_idea(client)
+        client.patch(
+            f"/api/ideas/{idea['id']}",
+            json={"comment": "comentario que se debe conservar"},
+        )
+        resp = client.patch(f"/api/ideas/{idea['id']}", json={"title": "Otro título"})
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "Otro título"
+        assert resp.json()["comment"] == "comentario que se debe conservar"
+
+    def test_generated_idea_exposes_comment_field(self, client):
+        idea = _create_test_idea(client)
+        assert "comment" in idea
+        assert idea["comment"] is None
+
     def test_update_idea_not_found(self, client):
         resp = client.patch("/api/ideas/nonexistent", json={"status": "discarded"})
         assert resp.status_code == 404
