@@ -512,3 +512,94 @@ de filtrado interactivo.
 - [x] 14.3 — Barra de filtros en sources, ideas y drafts (chips "+ Add filter")
 - [x] 14.4 — `created_at` visible en `sources.astro` + badge "disabled"
 - [x] 14.5 — Tests: 365 tests totales, todos pasan (17 nuevos); build frontend OK
+
+---
+
+## Fase 15 — Suite de tests básica del frontend
+
+### Contexto
+
+El frontend (Astro + TypeScript) carecía por completo de tests automatizados.
+Toda la lógica testeable vive en `src/scripts/*.ts` (módulos importados por los
+`<script>` inline de las páginas): `icons.ts`, `card.ts`, `dom.ts`, `types.ts`.
+Las páginas `.astro` contienen lógica inline que habla con la API en
+`localhost:8000`, fuera del alcance de una suite "básica".
+
+### Plan de implementación
+
+#### 15.1 Stack y configuración
+
+- **Vitest** ^2.1 como runner (rápido, hereda el alias `~/*` del tsconfig).
+- **happy-dom** ^15 como entorno DOM ligero (sin descargar navegadores).
+- **@types/node** ^22 para tipar `node:url` en `vitest.config.ts`.
+- `frontend/vitest.config.ts` con alias `~ → ./src`, entorno `happy-dom`,
+  `include: src/**/*.test.ts`, coverage v8 sobre `src/scripts/**/*.ts`.
+- `tsconfig.json`: `types: ["astro/client", "node"]` para que `astro check`
+  no falle al type-checkar `vitest.config.ts`.
+- Scripts en `package.json`: `test`, `test:watch`, `test:coverage`.
+
+#### 15.2 Tests unitarios sobre `src/scripts/`
+
+- `icons.test.ts` (12 tests): `iconPath` existente/inexistente, `icon` con
+  size por defecto/personalizado/clase, `ICON_NAMES` sin duplicados.
+- `dom.test.ts` (19 tests): `byId`, `q`, `qAll` contra DOM real (happy-dom);
+  `getErrorMessage` con detail string/array/no-JSON; `esc` y `escAttr`
+  escapan `<`, `>`, `&`, `"` y neutralizan payloads XSS.
+- `card.test.ts` (34 tests): `entityCard` con/sin body, `cardTitle` con XSS
+  de atributo (verificado via parseo DOM), `contextBadge`, `statusBadgeSoft`,
+  `actionBtn`/`actionEdit`/`actionDisabled`/`copyBtn` con escaping de
+  atributos, `metaChip`, `tagChips` con XSS, `urlRow` hostname vs fallback,
+  `actionsWrap`/`metaWrap`.
+
+#### 15.3 Verificación
+
+- `pnpm test` — 65 tests pasan.
+- `pnpm check` — 0 errores (astro check).
+- `pnpm build` — build exitoso (9 páginas).
+
+### Fase 15 — Suite de tests básica del frontend
+
+- [x] 15.1 — Vitest + happy-dom + @types/node; `vitest.config.ts` + scripts `test`/`test:watch`/`test:coverage`; `tsconfig.json` con `types: ["astro/client", "node"]`
+- [x] 15.2 — 65 tests: 12 icons + 19 dom + 34 card (incluye casos XSS de texto y atributo via parseo DOM)
+- [x] 15.3 — `pnpm test` (65 pass), `pnpm check` (0 errores), `pnpm build` OK
+
+---
+
+## Fase 16 — Migración del frontend a pnpm
+
+### Contexto
+
+El frontend usaba npm como gestor de paquetes. Se migra a pnpm para alinear
+con prácticas modernas del ecosistema Node (mejor rendimiento, disco
+compartido vía store global, lockfile determinista, resolución estricta de
+dependencias que evita imports fantasma).
+
+### Plan de implementación
+
+#### 16.1 Configuración
+
+- `frontend/package.json`: campo `packageManager: "pnpm@10.30.3"` (corepack)
+- `frontend/package.json`: sección `pnpm.onlyBuiltDependencies` aprobando
+  `esbuild` y `sharp` (pnpm 10 bloquea por defecto los postinstall scripts;
+  ambos son necesarios para Vite/Vitest y Astro respectivamente)
+- Eliminado `frontend/package-lock.json`
+- Generado `frontend/pnpm-lock.yaml`
+
+#### 16.2 Documentación
+
+- `README.md`: pnpm añadido a "Requisitos"; `pnpm install` en "Instalación";
+  `pnpm dev` y `pnpm test` en "Servidores" y "Desarrollo"
+- `ROADMAP.md`: referencias `npm run` → `pnpm` en la Fase 15
+
+#### 16.3 Verificación
+
+- `pnpm install` — 398 paquetes, build scripts de esbuild+sharp ejecutados
+- `pnpm test` — 65 tests pasan
+- `pnpm check` — 0 errores (astro check)
+- `pnpm build` — 9 páginas construidas OK
+
+### Fase 16 — Migración del frontend a pnpm
+
+- [x] 16.1 — `packageManager: pnpm@10.30.3` + `pnpm.onlyBuiltDependencies` (esbuild, sharp); `package-lock.json` eliminado; `pnpm-lock.yaml` generado
+- [x] 16.2 — README.md actualizado (Requisitos, Instalación, Servidores, Desarrollo); ROADMAP.md actualizado
+- [x] 16.3 — `pnpm install` + `pnpm test` (65 pass) + `pnpm check` (0 errores) + `pnpm build` OK
