@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from urllib.parse import urlparse
@@ -23,6 +24,7 @@ seed_store = get_seed_repository()
 source_store = get_source_repository()
 
 router = APIRouter(tags=["seeds"])
+logger = logging.getLogger(__name__)
 
 _MAX_WORKERS = 5
 
@@ -165,6 +167,7 @@ def _fetch_one_source(source: Source) -> list[CollectedItem]:
     try:
         return collector.fetch()
     except Exception:
+        logger.exception("Collector for source '%s' (%s) failed", source.id, source.name)
         return []
 
 

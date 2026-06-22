@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -12,6 +13,8 @@ from bs4 import BeautifulSoup
 
 from .base import BaseCollector, CollectedItem
 from .playwright_utils import PlaywrightBrowser
+
+logger = logging.getLogger(__name__)
 
 _USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -57,6 +60,7 @@ class RSSCollector(BaseCollector):
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
         except Exception:
+            logger.warning("Failed to fetch article %s", url, exc_info=True)
             return ""
 
         for tag in soup(["script", "style", "nav", "footer", "header"]):

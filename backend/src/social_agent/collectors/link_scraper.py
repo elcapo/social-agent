@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -12,6 +13,8 @@ from social_agent.utils import html_to_markdown
 
 from .base import BaseCollector, CollectedItem
 from .playwright_utils import PlaywrightBrowser
+
+logger = logging.getLogger(__name__)
 
 _MAX_WORKERS = 5
 
@@ -139,6 +142,7 @@ class LinkScraperCollector(BaseCollector):
             soup, _ = self._fetch_page(url)
             return self._extract_content(soup)
         except Exception:
+            logger.warning("Failed to fetch article %s", url, exc_info=True)
             return ""
 
     def _next_page_url(self, soup: BeautifulSoup, current_url: str) -> Optional[str]:
@@ -213,6 +217,7 @@ class LinkScraperCollector(BaseCollector):
             soup = BeautifulSoup(response.text, "html.parser")
             return self._extract_content(soup)
         except Exception:
+            logger.warning("Failed to fetch article %s", url, exc_info=True)
             return ""
 
     def _do_fetch(self) -> list[CollectedItem]:
@@ -220,6 +225,7 @@ class LinkScraperCollector(BaseCollector):
         try:
             soup, resolved_url = self._fetch_page(self.url)
         except Exception:
+            logger.exception("Failed to fetch listing page %s", self.url)
             return items
 
         pattern = self._build_pattern(resolved_url)
