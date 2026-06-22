@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from pydantic_settings import BaseSettings
 
@@ -28,5 +30,23 @@ class Settings(BaseSettings):
     storage_backend: str = "markdown"
     sqlite_path: Optional[Path] = None
 
+    timezone: str = "Europe/Madrid"
+
 
 settings = Settings()
+
+
+@lru_cache(maxsize=32)
+def _zoneinfo(name: str) -> ZoneInfo:
+    """Return a cached ``ZoneInfo`` for a given IANA timezone name."""
+    return ZoneInfo(name)
+
+
+def get_tz(name: Optional[str] = None) -> ZoneInfo:
+    """Return the ``ZoneInfo`` for the configured timezone (or the given name).
+
+    Reads ``settings.timezone`` at call time so tests that monkeypatch the
+    setting see the updated value; the underlying ``ZoneInfo`` objects are
+    cached by name (they are immutable).
+    """
+    return _zoneinfo(name or settings.timezone)

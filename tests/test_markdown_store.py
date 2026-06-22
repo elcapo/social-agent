@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from social_agent.config import settings as global_settings
 from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.idea import Idea
 from social_agent.models.seed import Seed, SeedStatus
@@ -226,6 +227,39 @@ class TestMarkdownStoreListScheduled:
         result = tmp_draft_store.list_scheduled()
         assert len(result) == 1
         assert result[0].id == naive_due.id
+
+    def test_list_scheduled_naive_interpreted_as_configured_tz(self, tmp_draft_store, monkeypatch):
+        """Naive ``scheduled_at`` is read as ``settings.timezone``, not as UTC.
+
+        With ``Africa/Lagos`` (UTC+1, no DST), a naive ``2026-06-22T00:30:00``
+        is ``2026-06-21T23:30:00 UTC``. Using a cutoff of ``2026-06-22T00:00:00
+        UTC`` the draft is due under the local interpretation but would NOT be
+        due if naive were treated as UTC.
+        """
+        monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
+        naive = Draft(
+            idea_id="i1", platform="twitter", content="naive-tz",
+            scheduled_at=datetime(2026, 6, 22, 0, 30),
+        )
+        tmp_draft_store.save(naive)
+        cutoff = datetime(2026, 6, 22, 0, 0, tzinfo=timezone.utc)
+        result = tmp_draft_store.list_scheduled(since=cutoff)
+        assert len(result) == 1
+        assert result[0].id == naive.id
+
+    def test_list_scheduled_naive_future_under_local_tz_excluded(
+        self, tmp_draft_store, monkeypatch
+    ):
+        """Mirror of the above: a naive value that is future under local tz is excluded."""
+        monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
+        # naive 23:30 local (UTC+1) = 2026-06-22T22:30 UTC, well after the cutoff.
+        naive_future = Draft(
+            idea_id="i1", platform="twitter", content="naive-future",
+            scheduled_at=datetime(2026, 6, 22, 23, 30),
+        )
+        tmp_draft_store.save(naive_future)
+        cutoff = datetime(2026, 6, 22, 0, 0, tzinfo=timezone.utc)
+        assert tmp_draft_store.list_scheduled(since=cutoff) == []
 
     def test_list_scheduled_roundtrips_through_disk(self, tmp_draft_store):
         due = Draft(

@@ -14,6 +14,7 @@ from social_agent.config import settings
 from social_agent.models.draft import Draft, DraftStatus
 from social_agent.models.idea import IdeaStatus
 from social_agent.storage import get_draft_repository, get_idea_repository
+from social_agent.timezone_utils import localize_to_utc
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,7 @@ def schedule_draft(draft_id: str, body: ScheduleDraftRequest) -> Draft:
     if draft.status == DraftStatus.published:
         raise HTTPException(400, "Cannot schedule a draft that is already published")
 
-    draft.scheduled_at = body.scheduled_at
+    draft.scheduled_at = localize_to_utc(body.scheduled_at)
     draft.status = DraftStatus.draft
     draft_store.save(draft)
     return draft

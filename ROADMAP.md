@@ -603,3 +603,83 @@ dependencias que evita imports fantasma).
 - [x] 16.1 — `packageManager: pnpm@10.30.3` + `pnpm.onlyBuiltDependencies` (esbuild, sharp); `package-lock.json` eliminado; `pnpm-lock.yaml` generado
 - [x] 16.2 — README.md actualizado (Requisitos, Instalación, Servidores, Desarrollo); ROADMAP.md actualizado
 - [x] 16.3 — `pnpm install` + `pnpm test` (65 pass) + `pnpm check` (0 errores) + `pnpm build` OK
+
+---
+
+## Fase 17 — Interpretación correcta de zona horaria en `schedule`
+
+### Contexto
+
+Al lanzar `schedule list` se veían publicaciones "vencidas" que no se
+publicaban. Causa raíz: los datetimes naive (sin offset) que el usuario
+introducía por CLI pensando en hora local se persistían como naive y, al
+compararlos contra `datetime.now(timezone.utc)`, se interpretaban como UTC
+— desplazando la hora real 1–2 horas hacia el futuro según DST. Así un
+draft programado para las 15:30 local se publicaba a las 15:30 UTC = 17:30
+local (en Madrid en verano), dando la sensación de "vencido sin publicar".
+
+### Plan de implementación
+
+#### 17.1 Zona horaria configurable
+
+- Nuevo campo `settings.timezone: str = "Europe/Madrid"` (override vía
+  `SOCIAL_AGENT_TIMEZONE`), nombre IANA.
+- `config.py`: helper `get_tz(name=None) -> ZoneInfo` con cache por nombre
+  (`lru_cache` sobre `_zoneinfo`); lee `settings.timezone` en cada llamada
+  para que monkeypatch en tests sea efectivo.
+
+#### 17.2 Helpers de conversión
+
+- Nuevo módulo `backend/src/social_agent/timezone_utils.py`:
+  - `localize_to_utc(dt)`: naive → TZ configurada → UTC-aware; aware →
+    normalizado a UTC (respeta offset original).
+  - `to_local_iso(dt)`: aware → TZ configurada → string ISO para display
+    (naive se asume UTC por la invariante de dominio).
+
+#### 17.3 CLI
+
+- `_parse_scheduled_at` aplica `localize_to_utc` al resultado de
+  `datetime.fromisoformat` → los drafts se guardan siempre UTC-aware
+  (refuerza la invariante de dominio).
+- `schedule set`: el echo muestra hora local y UTC, p. ej.
+  `scheduled for 2026-06-22T16:30:00+02:00 (14:30:00+00:00)`.
+- `schedule list`: muestra `to_local_iso(d.scheduled_at)` en vez del ISO
+  crudo UTC.
+
+#### 17.4 MarkdownStore
+
+- `list_scheduled` cambia la rama naive de `replace(tzinfo=utc)` a
+  `replace(tzinfo=get_tz()).astimezone(utc)`: los drafts legacy con
+  `scheduled_at` naive se re-interpretan como hora local al evaluar si
+  están vencidos — migra automáticamente el estado pendiente.
+- La rama aware se queda igual.
+- `sqlalchemy_repositories.list_scheduled` **sin cambios**: ahí los naive
+  llegan vía pysqlite (genuinamente UTC, ya normalizados por `_ensure_utc`
+  en `_to_pydantic`).
+
+#### 17.5 API REST
+
+- `POST /api/drafts/{id}/schedule` aplica `localize_to_utc` al
+  `scheduled_at` del body para coherencia CLI↔API.
+
+#### 17.6 Tests
+
+- `tests/test_cli.py`: fixture autouse `_default_utc_timezone` fija
+  `settings.timezone = "UTC"` para no romper los tests existentes; nueva
+  clase `TestScheduleTimezone` con 4 tests (naive→UTC+1, offset explícito
+  respetado, echo con ambas representaciones, list muestra hora local y
+  no filtra UTC).
+- `tests/test_markdown_store.py`: 2 tests nuevos sobre
+  `list_scheduled` con naive interpretado como TZ configurada (due y
+  future boundary) usando `Africa/Lagos` (UTC+1 sin DST, determinista).
+- `test_set_schedule` reforzado con `restored.scheduled_at.tzinfo is not None`.
+
+### Fase 17 — Interpretación correcta de zona horaria en `schedule`
+
+- [x] 17.1 — `settings.timezone` + `get_tz()` con cache en `config.py`
+- [x] 17.2 — `timezone_utils.py` con `localize_to_utc` y `to_local_iso`
+- [x] 17.3 — CLI `_parse_scheduled_at` / `schedule set` / `schedule list` actualizados
+- [x] 17.4 — `MarkdownStore.list_scheduled` interpreta naive como TZ configurada
+- [x] 17.5 — `POST /api/drafts/{id}/schedule` aplica `localize_to_utc`
+- [x] 17.6 — Tests: 371 tests totales, todos pasan (+6 nuevos); ruff sin nuevos errores
+- [x] Documentación: `docs/publicacion-programada.md` + `.env.example` actualizados

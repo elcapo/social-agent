@@ -40,6 +40,16 @@ def runner() -> CliRunner:
     return CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _default_utc_timezone(monkeypatch):
+    """Default ``settings.timezone`` to UTC so existing tests are deterministic.
+
+    Tests that exercise timezone-aware behavior override this by monkeypatching
+    ``global_settings.timezone`` to a fixed-offset zone (e.g. ``Africa/Lagos``).
+    """
+    monkeypatch.setattr(global_settings, "timezone", "UTC")
+
+
 def _make_draft(store: MarkdownStore[Draft], **kwargs) -> Draft:
     defaults = dict(idea_id="idea_1", platform="twitter", content="Hello world")
     defaults.update(kwargs)
@@ -67,6 +77,7 @@ class TestScheduleSet:
         assert "scheduled for" in result.output
         restored = cli_draft_store.get(draft.id)
         assert restored.scheduled_at is not None
+        assert restored.scheduled_at.tzinfo is not None
         assert restored.status == DraftStatus.approved
 
     def test_set_schedule_not_found(self, runner, cli_draft_store):
@@ -224,6 +235,63 @@ class TestSchedulePublish:
         assert result.exit_code == 0
         assert "No drafts due" in result.output
         assert cli_draft_store.get(draft.id).status == DraftStatus.draft
+
+
+class TestScheduleTimezone:
+    """Naive datetimes are interpreted as ``settings.timezone`` and stored as UTC."""
+
+    def test_set_schedule_naive_uses_configured_tz(self, runner, cli_draft_store, monkeypatch):
+        # Africa/Lagos is UTC+1 year-round (no DST) → deterministic.
+        monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
+        draft = _make_draft(cli_draft_store)
+        result = runner.invoke(
+            cli,
+            ["schedule", "set", draft.id, "2026-06-22T15:30:00"],
+        )
+        assert result.exit_code == 0
+        restored = cli_draft_store.get(draft.id)
+        assert restored.scheduled_at == datetime(2026, 6, 22, 14, 30, tzinfo=timezone.utc)
+        assert restored.scheduled_at.tzinfo is not None
+
+    def test_set_schedule_explicit_offset_respected(self, runner, cli_draft_store, monkeypatch):
+        # An explicit offset must win over the configured timezone.
+        monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
+        draft = _make_draft(cli_draft_store)
+        result = runner.invoke(
+            cli,
+            ["schedule", "set", draft.id, "2026-06-22T15:30:00+03:00"],
+        )
+        assert result.exit_code == 0
+        restored = cli_draft_store.get(draft.id)
+        assert restored.scheduled_at == datetime(2026, 6, 22, 12, 30, tzinfo=timezone.utc)
+
+    def test_set_schedule_echo_shows_local_and_utc(self, runner, cli_draft_store, monkeypatch):
+        monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
+        draft = _make_draft(cli_draft_store)
+        result = runner.invoke(
+            cli,
+            ["schedule", "set", draft.id, "2026-06-22T15:30:00"],
+        )
+        assert result.exit_code == 0
+        # Local rendering and UTC rendering both appear in the echo.
+        assert "2026-06-22T15:30:00+01:00" in result.output
+        assert "2026-06-22T14:30:00+00:00" in result.output
+
+    def test_list_displays_in_configured_tz(self, runner, cli_draft_store, monkeypatch):
+        monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
+        draft = _make_draft(
+            cli_draft_store,
+            scheduled_at=datetime(2026, 6, 22, 14, 30, tzinfo=timezone.utc),
+        )
+        cli_draft_store.save(draft)
+        result = runner.invoke(
+            cli,
+            ["schedule", "list"],
+        )
+        assert result.exit_code == 0
+        assert "2026-06-22T15:30:00+01:00" in result.output
+        # The raw UTC value must NOT leak into the display.
+        assert "2026-06-22T14:30:00" not in result.output
 
 
 class TestIdeasComment:

@@ -26,6 +26,7 @@ from social_agent.storage import (
     get_seed_repository,
     get_source_repository,
 )
+from social_agent.timezone_utils import localize_to_utc, to_local_iso
 from social_agent.utils import html_to_markdown
 
 DATA_DIR = settings.data_dir.resolve()
@@ -711,19 +712,26 @@ def schedule() -> None:
 
 def _parse_scheduled_at(raw: str) -> datetime:
     try:
-        return datetime.fromisoformat(raw)
+        dt = datetime.fromisoformat(raw)
     except ValueError:
         raise click.BadParameter(
             "Invalid datetime format. Use ISO 8601, e.g. '2026-06-20T15:30:00' "
             "(optionally with timezone)."
         )
+    return localize_to_utc(dt)
 
 
 @schedule.command("set")
 @click.argument("draft_id")
 @click.argument("scheduled_at")
 def schedule_set(draft_id: str, scheduled_at: str) -> None:
-    """Set a publication time for a draft (ISO 8601 datetime)."""
+    """Set a publication time for a draft (ISO 8601 datetime).
+
+    Naive datetimes (without timezone offset) are interpreted as the configured
+    local timezone (``SOCIAL_AGENT_TIMEZONE``, default ``Europe/Madrid``) and
+    stored as UTC-aware. Datetimes with an explicit offset are respected and
+    normalized to UTC.
+    """
     draft = draft_store.get(draft_id)
     if not draft:
         click.echo(f"Draft '{draft_id}' not found.")
@@ -736,7 +744,9 @@ def schedule_set(draft_id: str, scheduled_at: str) -> None:
     draft.scheduled_at = when
     draft.status = DraftStatus.approved
     draft_store.save(draft)
-    click.echo(f"Draft '{draft_id}' scheduled for {when.isoformat()}.")
+    click.echo(
+        f"Draft '{draft_id}' scheduled for {to_local_iso(when)} ({when.isoformat()})."
+    )
 
 
 @schedule.command("list")
@@ -748,7 +758,9 @@ def schedule_list() -> None:
         return
     items.sort(key=lambda d: d.scheduled_at)
     for d in items:
-        click.echo(f"  [{d.id}] ({d.platform}) {d.status.value} -> {d.scheduled_at.isoformat()}")
+        click.echo(
+            f"  [{d.id}] ({d.platform}) {d.status.value} -> {to_local_iso(d.scheduled_at)}"
+        )
 
 
 @schedule.command("cancel")

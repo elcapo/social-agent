@@ -7,6 +7,8 @@ from typing import Any, Callable, Generic, Optional, TypeVar
 import frontmatter
 import yaml
 
+from social_agent.config import get_tz
+
 T = TypeVar("T")
 
 
@@ -110,8 +112,15 @@ class MarkdownStore(Generic[T]):
         (``since`` defaults to now in UTC). Items whose ``status`` value is not in
         ``status_values`` (default ``("draft",)``) are excluded so already
         published/failed/rejected drafts are not re-published.
+
+        Naive ``scheduled_at`` values are interpreted as the configured local
+        timezone (``settings.timezone``) and converted to UTC before comparison.
+        This matches the CLI ``schedule set`` semantics and lets legacy drafts
+        created with naive local datetimes be re-published correctly.
         """
         cutoff = since if since is not None else datetime.now(timezone.utc)
+        if cutoff.tzinfo is None:
+            cutoff = cutoff.replace(tzinfo=timezone.utc)
         allowed = set(status_values)
 
         def _due(item: T) -> bool:
@@ -123,7 +132,7 @@ class MarkdownStore(Generic[T]):
             if status_val not in allowed:
                 return False
             if scheduled.tzinfo is None:
-                scheduled = scheduled.replace(tzinfo=timezone.utc)
+                scheduled = scheduled.replace(tzinfo=get_tz()).astimezone(timezone.utc)
             return scheduled <= cutoff
 
         return self.list(filter_fn=_due)
