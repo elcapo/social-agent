@@ -247,6 +247,13 @@ class SqlAlchemySeedRepository:
     def list_by_source(self, source_id: str) -> list[Seed]:
         return self.list(filter_fn=lambda sd: sd.source_id == source_id)
 
+    def list_source_urls(self) -> set[str]:
+        with _session(self._sf) as s:
+            rows = s.execute(
+                select(SeedORM.source_url).where(SeedORM.source_url.isnot(None))
+            ).scalars().all()
+            return {url for url in rows if url}
+
 
 # ── Idea ────────────────────────────────────────────────────────────────────
 

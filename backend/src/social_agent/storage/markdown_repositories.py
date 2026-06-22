@@ -48,6 +48,9 @@ class MarkdownSeedRepository(MarkdownStore[Seed]):
     def list_by_source(self, source_id: str) -> list[Seed]:
         return self.list(filter_fn=lambda s: s.source_id == source_id)
 
+    def list_source_urls(self) -> set[str]:
+        return super().list_source_urls()
+
 
 class MarkdownIdeaRepository(MarkdownStore[Idea]):
     """MarkdownStore for `Idea` that satisfies `IdeaRepository`."""

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -11,6 +12,8 @@ from social_agent.utils import html_to_markdown
 
 from .base import BaseCollector, CollectedItem
 from .playwright_utils import PlaywrightBrowser
+
+_MAX_WORKERS = 5
 
 
 def _fetch_page(url: str, renderer: str = "httpx") -> tuple[BeautifulSoup, str]:
@@ -153,6 +156,65 @@ class LinkScraperCollector(BaseCollector):
         finally:
             self._close_browser()
 
+    def _collect_links(
+        self, soup: BeautifulSoup, resolved_url: str, pattern: re.Pattern,
+    ) -> list[dict]:
+        """Collect unique links across the listing page and any pagination."""
+        collected: list[dict] = []
+        collected_urls: set[str] = set()
+
+        for link in self._extract_links(soup, resolved_url, pattern):
+            if len(collected) >= self.max_items:
+                return collected
+            if link["url"] in collected_urls:
+                continue
+            collected_urls.add(link["url"])
+            collected.append(link)
+
+        next_url = self._next_page_url(soup, resolved_url)
+        while next_url and len(collected) < self.max_items:
+            try:
+                soup, resolved_next = self._fetch_page(next_url)
+            except Exception:
+                break
+            for link in self._extract_links(soup, resolved_next, pattern):
+                if len(collected) >= self.max_items:
+                    break
+                if link["url"] in collected_urls:
+                    continue
+                collected_urls.add(link["url"])
+                collected.append(link)
+            next_url = self._next_page_url(soup, resolved_next)
+
+        return collected[: self.max_items]
+
+    def _fetch_articles_concurrent(self, urls: list[str]) -> list[str]:
+        """Fetch article content for ``urls`` concurrently with a shared client.
+
+        Playwright is not thread-safe, so when ``renderer == "playwright"`` this
+        falls back to sequential fetching. Results are returned in the same
+        order as ``urls``.
+        """
+        if self.renderer == "playwright" or len(urls) <= 1:
+            return [self._fetch_article(url) for url in urls]
+
+        with httpx.Client(follow_redirects=True, timeout=30) as client:
+            with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+                futures = [
+                    pool.submit(self._fetch_article_with_client, url, client)
+                    for url in urls
+                ]
+                return [f.result() for f in futures]
+
+    def _fetch_article_with_client(self, url: str, client: httpx.Client) -> str:
+        try:
+            response = client.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            return self._extract_content(soup)
+        except Exception:
+            return ""
+
     def _do_fetch(self) -> list[CollectedItem]:
         items: list[CollectedItem] = []
         try:
@@ -161,20 +223,16 @@ class LinkScraperCollector(BaseCollector):
             return items
 
         pattern = self._build_pattern(resolved_url)
-        links = self._extract_links(soup, resolved_url, pattern)
+        links = self._collect_links(soup, resolved_url, pattern)
+        if not links:
+            return items
 
-        collected_urls = set()
-        for link in links:
-            if len(items) >= self.max_items:
-                break
-            if link["url"] in collected_urls:
-                continue
-            collected_urls.add(link["url"])
+        if self.full_content:
+            contents = self._fetch_articles_concurrent([link["url"] for link in links])
+        else:
+            contents = [""] * len(links)
 
-            content = ""
-            if self.full_content:
-                content = self._fetch_article(link["url"])
-
+        for link, content in zip(links, contents):
             items.append(
                 CollectedItem(
                     title=link["title"] or (content[:80] if content else link["url"]),
@@ -185,35 +243,5 @@ class LinkScraperCollector(BaseCollector):
                     tags=self.tags,
                 )
             )
-
-        next_url = self._next_page_url(soup, resolved_url)
-        while next_url and len(items) < self.max_items:
-            try:
-                soup, resolved_next = self._fetch_page(next_url)
-            except Exception:
-                break
-            more_links = self._extract_links(soup, resolved_next, pattern)
-            for link in more_links:
-                if len(items) >= self.max_items:
-                    break
-                if link["url"] in collected_urls:
-                    continue
-                collected_urls.add(link["url"])
-
-                content = ""
-                if self.full_content:
-                    content = self._fetch_article(link["url"])
-
-                items.append(
-                    CollectedItem(
-                        title=link["title"] or (content[:80] if content else link["url"]),
-                        content=content or link["title"],
-                        url=link["url"],
-                        source_id=self.source_id,
-                        source_name=self.source_name,
-                        tags=self.tags,
-                    )
-                )
-            next_url = self._next_page_url(soup, resolved_next)
 
         return items[: self.max_items]

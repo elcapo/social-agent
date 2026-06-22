@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -22,6 +23,8 @@ seed_store = get_seed_repository()
 source_store = get_source_repository()
 
 router = APIRouter(tags=["seeds"])
+
+_MAX_WORKERS = 5
 
 
 class GenerateSeedsRequest(BaseModel):
@@ -62,7 +65,9 @@ class CreateSeedRequest(BaseModel):
 def _build_collector(source: Source):
     match source.source_type:
         case SourceType.rss:
-            return RSSCollector(source.id, source.name, source.url, source.tags, config=source.config)
+            return RSSCollector(
+                source.id, source.name, source.url, source.tags, config=source.config,
+            )
         case SourceType.webpage:
             return WebScraperCollector(source.id, source.name, source.url, source.tags)
         case SourceType.link_scraper:
@@ -143,6 +148,26 @@ def get_seed(seed_id: str) -> Seed:
     return seed
 
 
+def _uses_playwright(source: Source) -> bool:
+    """Return True if the source's collector renders with Playwright.
+
+    Playwright is not thread-safe, so sources using it must be fetched
+    sequentially rather than through the thread pool.
+    """
+    renderer = (source.config or {}).get("renderer", "httpx")
+    return renderer == "playwright"
+
+
+def _fetch_one_source(source: Source) -> list[CollectedItem]:
+    collector = _build_collector(source)
+    if collector is None:
+        return []
+    try:
+        return collector.fetch()
+    except Exception:
+        return []
+
+
 @router.post("/seeds/generate", status_code=201)
 def generate_seeds(body: GenerateSeedsRequest) -> GenerateSeedsResponse:
     sources = source_store.list(filter_fn=lambda s: s.enabled)
@@ -152,26 +177,28 @@ def generate_seeds(body: GenerateSeedsRequest) -> GenerateSeedsResponse:
     if not sources:
         raise HTTPException(400, "No enabled sources found")
 
+    # Split sources: Playwright sources must run sequentially (not thread-safe);
+    # the rest can be fetched concurrently.
+    pw_sources = [s for s in sources if _uses_playwright(s)]
+    other_sources = [s for s in sources if not _uses_playwright(s)]
+
     all_items: list[CollectedItem] = []
-    for src in sources:
-        collector = _build_collector(src)
-        if collector is None:
-            continue
-        try:
-            all_items.extend(collector.fetch())
-        except Exception:
-            continue
+
+    for src in pw_sources:
+        all_items.extend(_fetch_one_source(src))
+
+    if other_sources:
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            results = pool.map(_fetch_one_source, other_sources)
+            for items in results:
+                all_items.extend(items)
 
     if not all_items:
         raise HTTPException(400, "No content collected from any source")
 
     existing_urls: set[str] = set()
     if not body.force:
-        existing = seed_store.list()
-        existing_urls = {
-            s.source_url for s in existing
-            if s.source_url and s.status in (SeedStatus.pending, SeedStatus.approved)
-        }
+        existing_urls = seed_store.list_source_urls()
 
     seeds: list[Seed] = []
     skipped = 0
@@ -182,6 +209,8 @@ def generate_seeds(body: GenerateSeedsRequest) -> GenerateSeedsResponse:
         seed = _collected_item_to_seed(item)
         seed_store.save(seed)
         seeds.append(seed)
+        if item.url:
+            existing_urls.add(item.url)
 
     return GenerateSeedsResponse(seeds=seeds, skipped=skipped)
 

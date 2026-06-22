@@ -136,3 +136,21 @@ class MarkdownStore(Generic[T]):
             return scheduled <= cutoff
 
         return self.list(filter_fn=_due)
+
+    def list_source_urls(self) -> set[str]:
+        """Return the set of all non-null ``source_url`` frontmatter values.
+
+        Cheaper than ``list()`` because only the YAML frontmatter is parsed,
+        skipping the markdown body and the Pydantic model hydration. Items
+        without a ``source_url`` key are ignored.
+        """
+        urls: set[str] = set()
+        if not self.directory.exists():
+            return urls
+        for path in sorted(self.directory.glob("*.md")):
+            with open(path, "r", encoding="utf-8") as f:
+                post = frontmatter.load(f)
+            url = post.metadata.get("source_url")
+            if url:
+                urls.add(url)
+        return urls

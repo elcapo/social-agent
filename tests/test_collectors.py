@@ -242,6 +242,95 @@ class TestRSSCollector:
         assert len(items) == 1
         assert items[0].content == ""
 
+    def test_fetch_respects_max_items_from_config(self):
+        entries = []
+        for i in range(10):
+            entries.append(feedparser.util.FeedParserDict({
+                "title": f"Article {i}",
+                "link": f"https://example.com/article-{i}",
+                "summary": f"Summary {i}",
+                "published_parsed": time.struct_time((2026, 1, i + 1, 0, 0, 0, 0, 0, 0)),
+            }))
+
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_parse.return_value.entries = entries
+            c = RSSCollector(
+                "src_1", "Test RSS", "https://example.com/feed",
+                config={"max_items": 3},
+            )
+            items = c.fetch()
+
+        assert len(items) == 3
+
+    def test_max_items_defaults_to_class_constant(self):
+        c = RSSCollector("src_1", "Test RSS", "https://example.com/feed")
+        assert c.max_items == RSSCollector.MAX_ITEMS
+
+    def test_fetch_deduplicates_entries_with_same_link(self):
+        dup_link = "https://example.com/article-1"
+        entries = [
+            feedparser.util.FeedParserDict({
+                "title": "Article One",
+                "link": dup_link,
+                "summary": "Summary one",
+                "published_parsed": time.struct_time((2026, 1, 1, 0, 0, 0, 0, 0, 0)),
+            }),
+            feedparser.util.FeedParserDict({
+                "title": "Article One (dup)",
+                "link": dup_link,
+                "summary": "Summary one dup",
+                "published_parsed": time.struct_time((2026, 1, 1, 0, 0, 0, 0, 0, 0)),
+            }),
+            feedparser.util.FeedParserDict({
+                "title": "Article Two",
+                "link": "https://example.com/article-2",
+                "summary": "Summary two",
+                "published_parsed": time.struct_time((2026, 1, 2, 0, 0, 0, 0, 0, 0)),
+            }),
+        ]
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse:
+            mock_parse.return_value.entries = entries
+            c = RSSCollector("src_1", "Test RSS", "https://example.com/feed")
+            items = c.fetch()
+
+        urls = {it.url for it in items}
+        assert urls == {"https://example.com/article-1", "https://example.com/article-2"}
+        assert len(items) == 2
+
+    def test_fetch_full_content_concurrent_multiple_entries(self):
+        entries = []
+        for i in range(4):
+            entries.append(feedparser.util.FeedParserDict({
+                "title": f"Article {i}",
+                "link": f"https://example.com/article-{i}",
+                "summary": f"Summary {i}",
+                "published_parsed": time.struct_time((2026, 1, i + 1, 0, 0, 0, 0, 0, 0)),
+            }))
+
+        def fake_get(url, *args, **kwargs):
+            body = f"<html><body><article><h1>{url}</h1><p>{'content ' * 100}</p></article></body></html>"
+            return MagicMock(status_code=200, text=body)
+
+        with patch("social_agent.collectors.rss.feedparser.parse") as mock_parse, \
+             patch("social_agent.collectors.rss.httpx.Client") as MockClient:
+            mock_parse.return_value.entries = entries
+            mock_client = MagicMock()
+            mock_client.get.side_effect = fake_get
+            mock_client.__enter__ = MagicMock(return_value=mock_client)
+            mock_client.__exit__ = MagicMock(return_value=None)
+            MockClient.return_value = mock_client
+
+            c = RSSCollector(
+                "src_1", "Test RSS", "https://example.com/feed",
+                config={"full_content": True},
+            )
+            items = c.fetch()
+
+        assert len(items) == 4
+        for item in items:
+            assert item.content != ""
+        assert mock_client.get.call_count == 4
+
 
 class TestTwitterCollector:
     def test_fetch_no_bearer_token(self):
@@ -453,19 +542,21 @@ class TestLinkScraperCollector:
         c = LinkScraperCollector("s1", "Test", "https://example.com/blog", config={"full_content": True})
         c.url_pattern = re.compile(r"/blog/.+")
 
-        responses = [
-            MagicMock(status_code=200, text=LISTING_HTML),
-            MagicMock(status_code=200, text=ARTICLE_HTML),
-            MagicMock(status_code=200, text=ARTICLE_HTML),
-            MagicMock(status_code=200, text=ARTICLE_HTML),
-        ]
+        article_response = MagicMock(status_code=200, text=ARTICLE_HTML)
 
-        with patch("social_agent.collectors.link_scraper.httpx.get") as mock_get:
-            mock_get.side_effect = responses
+        with patch("social_agent.collectors.link_scraper.httpx.get") as mock_get, \
+             patch("social_agent.collectors.link_scraper.httpx.Client") as MockClient:
+            mock_get.return_value = MagicMock(status_code=200, text=LISTING_HTML)
+            mock_client = MagicMock()
+            mock_client.get.return_value = article_response
+            mock_client.__enter__ = MagicMock(return_value=mock_client)
+            mock_client.__exit__ = MagicMock(return_value=None)
+            MockClient.return_value = mock_client
             items = c.fetch()
 
         assert len(items) == 3
         assert "full content" in items[0].content.lower()
+        assert mock_client.get.call_count == 3
 
     def test_fetch_filters_by_url_pattern(self):
         c = LinkScraperCollector("s1", "Test", "https://example.com/blog", config={"full_content": False})

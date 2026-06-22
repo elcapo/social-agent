@@ -326,7 +326,73 @@ class TestSeedsAPI:
         ):
             resp = client.post("/api/seeds/generate", json={})
         assert resp.status_code == 201
-        assert len(resp.json()["seeds"]) == 2
+        data = resp.json()
+        assert len(data["seeds"]) == 1
+        assert data["skipped"] == 1
+
+    def test_generate_seeds_skips_discarded_url(self, client):
+        _create_test_source(client)
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            client.post("/api/seeds/generate", json={})
+
+        seed = client.get("/api/seeds").json()[0]
+        client.patch(f"/api/seeds/{seed['id']}", json={"status": "discarded"})
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            resp = client.post("/api/seeds/generate", json={})
+        assert resp.status_code == 201
+        assert resp.json()["skipped"] == 1
+        assert len(resp.json()["seeds"]) == 0
+        assert len(client.get("/api/seeds").json()) == 1
+
+    def test_generate_seeds_skips_used_url(self, client):
+        _create_test_source(client)
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            client.post("/api/seeds/generate", json={})
+
+        seed = client.get("/api/seeds").json()[0]
+        client.patch(f"/api/seeds/{seed['id']}", json={"status": "used"})
+
+        with patch(
+            "social_agent.api.router_seeds.RSSCollector.fetch",
+            return_value=MOCK_COLLECTED,
+        ):
+            resp = client.post("/api/seeds/generate", json={})
+        assert resp.status_code == 201
+        assert resp.json()["skipped"] == 1
+        assert len(resp.json()["seeds"]) == 0
+        assert len(client.get("/api/seeds").json()) == 1
+
+    def test_generate_seeds_no_intra_batch_duplicates(self, client):
+        _create_test_source(client)
+        _create_test_source(client)
+
+        items = [
+            CollectedItem(
+                title="Same Article", content="Body",
+                url="https://example.com/shared",
+                source_id="src_test", source_name="Test Source",
+                published=datetime.now(timezone.utc),
+            ),
+        ]
+        with patch("social_agent.api.router_seeds.RSSCollector.fetch", return_value=items):
+            resp = client.post("/api/seeds/generate", json={})
+        assert resp.status_code == 201
+        data = resp.json()
+        assert len(data["seeds"]) == 1
+        assert data["skipped"] == 1
+        assert len(client.get("/api/seeds").json()) == 1
 
     def test_list_seeds_filter_by_status(self, client):
         seed = _create_test_seed(client)

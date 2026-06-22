@@ -81,6 +81,17 @@ class TestMarkdownStoreSeed:
         tmp_seed_store.save(Seed(title="B", content="B"))
         assert tmp_seed_store.count() == 2
 
+    def test_list_source_urls(self, tmp_seed_store: MarkdownStore[Seed]):
+        tmp_seed_store.save(Seed(title="1", content="c", source_url="https://a.com/1"))
+        tmp_seed_store.save(Seed(title="2", content="c", source_url="https://a.com/2"))
+        tmp_seed_store.save(Seed(title="3", content="c", source_url=None))
+        tmp_seed_store.save(Seed(title="4", content="c", source_url="https://a.com/1"))
+        urls = tmp_seed_store.list_source_urls()
+        assert urls == {"https://a.com/1", "https://a.com/2"}
+
+    def test_list_source_urls_empty(self, tmp_seed_store: MarkdownStore[Seed]):
+        assert tmp_seed_store.list_source_urls() == set()
+
     def test_back_and_forth_preserves_all_fields(self, tmp_seed_store: MarkdownStore[Seed]):
         original = Seed(
             title="Full Test",

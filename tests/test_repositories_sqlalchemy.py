@@ -271,6 +271,14 @@ class TestSqlAlchemySeedRepository:
         assert len(of_a) == 2
         assert {s.title for s in of_a} == {"1", "3"}
 
+    def test_list_source_urls(self, seed_repo):
+        seed_repo.save(Seed(title="1", content="c", source_url="https://a.com/1"))
+        seed_repo.save(Seed(title="2", content="c", source_url="https://a.com/2"))
+        seed_repo.save(Seed(title="3", content="c", source_url=None))
+        seed_repo.save(Seed(title="4", content="c", source_url="https://a.com/1"))
+        urls = seed_repo.list_source_urls()
+        assert urls == {"https://a.com/1", "https://a.com/2"}
+
     def test_delete(self, seed_repo, sample_seed):
         seed_repo.save(sample_seed)
         assert seed_repo.delete(sample_seed.id) is True
