@@ -71,12 +71,13 @@ def run_once(
     """Publish every scheduled draft that is due.
 
     A draft is due when it has a populated ``scheduled_at`` that is not later than
-    ``since`` (defaults to now in UTC) and its status is ``draft`` or ``approved``
-    (already published/failed/rejected drafts are skipped). Each due draft is
-    published through its platform publisher, the result is persisted, and a
-    :class:`ScheduledItemResult` is returned describing the outcome.
+    ``since`` (defaults to now in UTC) and its status is ``approved`` (drafts that
+    have not been approved, and already published/failed/rejected drafts, are
+    skipped). Each due draft is published through its platform publisher, the
+    result is persisted, and a :class:`ScheduledItemResult` is returned
+    describing the outcome.
     """
-    publishable = (DraftStatus.draft.value, DraftStatus.approved.value)
+    publishable = (DraftStatus.approved.value,)
     due = draft_store.list_scheduled(since=since, status_values=publishable)
     results: list[ScheduledItemResult] = []
 

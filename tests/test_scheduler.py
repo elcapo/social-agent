@@ -21,6 +21,7 @@ def _due_draft(store: MarkdownStore[Draft], **kwargs) -> Draft:
         idea_id="i1",
         platform="twitter",
         content="due",
+        status=DraftStatus.approved,
         scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
     )
     defaults.update(kwargs)
@@ -173,11 +174,24 @@ class TestRunOnce:
     def test_skips_disallowed_statuses(self, draft_store):
         from social_agent.scheduler import run_once
 
-        for status in (DraftStatus.published, DraftStatus.failed, DraftStatus.rejected):
+        for status in (
+            DraftStatus.draft,
+            DraftStatus.published,
+            DraftStatus.failed,
+            DraftStatus.rejected,
+        ):
             draft = _due_draft(draft_store, status=status)
             assert draft.status == status
 
         assert run_once(draft_store) == []
+
+    def test_skips_draft_status_even_when_due(self, draft_store):
+        from social_agent.scheduler import run_once
+
+        draft = _due_draft(draft_store, status=DraftStatus.draft)
+        assert run_once(draft_store) == []
+        assert draft_store.get(draft.id).status == DraftStatus.draft
+        assert draft_store.get(draft.id).scheduled_at is not None
 
     def test_publisher_exception_caught(self, draft_store):
         from social_agent.scheduler import run_once

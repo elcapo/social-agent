@@ -86,7 +86,10 @@ def list_drafts(
 
 @router.get("/drafts/scheduled")
 def list_scheduled_drafts() -> list[Draft]:
-    return [d for d in draft_store.list() if d.scheduled_at is not None]
+    return [
+        d for d in draft_store.list()
+        if d.scheduled_at is not None and d.status == DraftStatus.approved
+    ]
 
 
 @router.get("/drafts/{draft_id}")
@@ -218,7 +221,7 @@ def schedule_draft(draft_id: str, body: ScheduleDraftRequest) -> Draft:
         raise HTTPException(400, "Cannot schedule a draft that is already published")
 
     draft.scheduled_at = localize_to_utc(body.scheduled_at)
-    draft.status = DraftStatus.draft
+    draft.status = DraftStatus.approved
     draft_store.save(draft)
     return draft
 

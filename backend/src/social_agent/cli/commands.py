@@ -690,6 +690,7 @@ def drafts_publish(draft_id: str, media_url: tuple[str, ...], media_path: tuple[
         draft.platform_post_id = result.platform_post_id
         draft.published_at = result.published_at
         draft.publish_error = None
+        draft.scheduled_at = None
         draft_store.save(draft)
         click.echo(
             f"Draft '{draft_id}' published to {draft.platform} "
@@ -752,7 +753,10 @@ def schedule_set(draft_id: str, scheduled_at: str) -> None:
 @schedule.command("list")
 def schedule_list() -> None:
     """List scheduled drafts."""
-    items = [d for d in draft_store.list() if d.scheduled_at is not None]
+    items = [
+        d for d in draft_store.list()
+        if d.scheduled_at is not None and d.status == DraftStatus.approved
+    ]
     if not items:
         click.echo("No scheduled drafts.")
         return
@@ -761,6 +765,28 @@ def schedule_list() -> None:
         click.echo(
             f"  [{d.id}] ({d.platform}) {d.status.value} -> {to_local_iso(d.scheduled_at)}"
         )
+
+
+@schedule.command("cleanup")
+def schedule_cleanup() -> None:
+    """Clear ``scheduled_at`` from drafts no longer awaiting publication.
+
+    Drafts whose status is ``published``, ``failed`` or ``rejected`` keep a stale
+    ``scheduled_at`` when published manually (CLI ``drafts publish`` or the
+    ``POST /publish/{id}`` endpoint). This command removes those stale values so
+    they no longer appear in ``schedule list``.
+    """
+    stale_statuses = (DraftStatus.published, DraftStatus.failed, DraftStatus.rejected)
+    cleaned = 0
+    for d in draft_store.list():
+        if d.scheduled_at is not None and d.status in stale_statuses:
+            d.scheduled_at = None
+            draft_store.save(d)
+            cleaned += 1
+    if cleaned:
+        click.echo(f"Cleared scheduled_at from {cleaned} draft(s).")
+    else:
+        click.echo("No stale scheduled drafts found.")
 
 
 @schedule.command("cancel")

@@ -61,6 +61,7 @@ def publish_draft(draft_id: str) -> Draft:
         draft.platform_post_id = result.platform_post_id
         draft.published_at = result.published_at
         draft.publish_error = None
+        draft.scheduled_at = None
     else:
         draft.status = DraftStatus.failed
         draft.publish_error = result.error

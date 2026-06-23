@@ -130,6 +130,7 @@ class TestScheduleList:
     def test_list_shows_scheduled(self, runner, cli_draft_store):
         draft = _make_draft(
             cli_draft_store,
+            status=DraftStatus.approved,
             scheduled_at=datetime(2026, 6, 20, 15, 30, tzinfo=timezone.utc),
         )
         cli_draft_store.save(draft)
@@ -140,6 +141,27 @@ class TestScheduleList:
         assert result.exit_code == 0
         assert draft.id in result.output
         assert "2026-06-20T15:30:00" in result.output
+
+    def test_list_excludes_non_approved(self, runner, cli_draft_store):
+        # A published draft with a stale scheduled_at must not appear.
+        published = _make_draft(
+            cli_draft_store,
+            status=DraftStatus.published,
+            scheduled_at=datetime(2026, 6, 20, 15, 30, tzinfo=timezone.utc),
+        )
+        cli_draft_store.save(published)
+        # A plain draft with a scheduled_at is also excluded (not approved).
+        plain = _make_draft(
+            cli_draft_store,
+            status=DraftStatus.draft,
+            scheduled_at=datetime(2026, 6, 20, 15, 30, tzinfo=timezone.utc),
+        )
+        cli_draft_store.save(plain)
+        result = runner.invoke(cli, ["schedule", "list"])
+        assert result.exit_code == 0
+        assert published.id not in result.output
+        assert plain.id not in result.output
+        assert "No scheduled drafts" in result.output
 
 
 class TestScheduleCancel:
@@ -187,6 +209,7 @@ class TestSchedulePublish:
     def test_publish_due_draft(self, runner, cli_draft_store):
         draft = _make_draft(
             cli_draft_store,
+            status=DraftStatus.approved,
             scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
         )
         cli_draft_store.save(draft)
@@ -237,6 +260,76 @@ class TestSchedulePublish:
         assert cli_draft_store.get(draft.id).status == DraftStatus.draft
 
 
+class TestScheduleCleanup:
+    def test_cleanup_clears_stale_scheduled_at(self, runner, cli_draft_store):
+        published = _make_draft(
+            cli_draft_store,
+            status=DraftStatus.published,
+            scheduled_at=datetime(2026, 6, 20, 15, 30, tzinfo=timezone.utc),
+        )
+        failed = _make_draft(
+            cli_draft_store,
+            status=DraftStatus.failed,
+            scheduled_at=datetime(2026, 6, 20, 16, 0, tzinfo=timezone.utc),
+        )
+        # An approved, still-scheduled draft must be left untouched.
+        approved = _make_draft(
+            cli_draft_store,
+            status=DraftStatus.approved,
+            scheduled_at=datetime(2026, 6, 20, 17, 0, tzinfo=timezone.utc),
+        )
+        for d in (published, failed, approved):
+            cli_draft_store.save(d)
+
+        result = runner.invoke(cli, ["schedule", "cleanup"])
+        assert result.exit_code == 0
+        assert "Cleared scheduled_at from 2 draft(s)" in result.output
+        assert cli_draft_store.get(published.id).scheduled_at is None
+        assert cli_draft_store.get(failed.id).scheduled_at is None
+        assert cli_draft_store.get(approved.id).scheduled_at is not None
+
+    def test_cleanup_nothing_to_do(self, runner, cli_draft_store):
+        result = runner.invoke(cli, ["schedule", "cleanup"])
+        assert result.exit_code == 0
+        assert "No stale scheduled drafts found" in result.output
+
+
+class TestDraftsPublishClearsSchedule:
+    def test_publish_clears_scheduled_at(self, runner, cli_draft_store):
+        draft = _make_draft(
+            cli_draft_store,
+            status=DraftStatus.approved,
+            scheduled_at=datetime(2026, 6, 20, 15, 30, tzinfo=timezone.utc),
+        )
+        cli_draft_store.save(draft)
+
+        from social_agent.publishers.base import PublishResult
+
+        patches = [
+            patch.object(global_settings, "twitter_api_key", "ck"),
+            patch.object(global_settings, "twitter_api_secret", "cs"),
+            patch.object(global_settings, "twitter_access_token", "at"),
+            patch.object(global_settings, "twitter_access_token_secret", "ats"),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            with patch(
+                "social_agent.publishers.twitter.TwitterPublisher.publish",
+                return_value=PublishResult(success=True, platform_post_id="manual_1"),
+            ):
+                result = runner.invoke(cli, ["drafts", "publish", draft.id])
+        finally:
+            for p in patches:
+                p.stop()
+
+        assert result.exit_code == 0
+        assert "published" in result.output
+        restored = cli_draft_store.get(draft.id)
+        assert restored.status == DraftStatus.published
+        assert restored.scheduled_at is None
+
+
 class TestScheduleTimezone:
     """Naive datetimes are interpreted as ``settings.timezone`` and stored as UTC."""
 
@@ -281,6 +374,7 @@ class TestScheduleTimezone:
         monkeypatch.setattr(global_settings, "timezone", "Africa/Lagos")
         draft = _make_draft(
             cli_draft_store,
+            status=DraftStatus.approved,
             scheduled_at=datetime(2026, 6, 22, 14, 30, tzinfo=timezone.utc),
         )
         cli_draft_store.save(draft)
