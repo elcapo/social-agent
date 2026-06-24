@@ -45,7 +45,7 @@ Sigue estas reglas:
 - No inventes nombres, cifras, empresas, productos ni detalles técnicos.
 - Responde solo con un objeto JSON, sin markdown, ni explicaciones.
 - El objeto debe tener: title (string) y summary (string).
-- El campo summary debe ser un resumen fiel del contenido original, sin adornos ni reelaboración.
+- El campo summary debe tener al menos tres párrafos y condensar en ellos toda la información relevante del artículo, sin omitir datos, nombres, cifras ni argumentos clave. No inventes información que no esté en el original.
 - El campo title debe ser un titular atractivo que capture la esencia de la idea."""
 
 
@@ -60,8 +60,9 @@ URL: {url}
 
 {content}
 
-Genera una idea detallada para un post basada en este artículo.
+Genera una idea para un post basada en este artículo.
 Escríbela en español aunque el idioma de la noticia sea otro.
+El campo summary debe tener al menos tres párrafos y condensar toda la información relevante del artículo, sin omitir datos ni argumentos clave.
 Devuelve solo un objeto JSON con title y summary."""
 
 
@@ -81,7 +82,7 @@ class IdeatorAgent(BaseAgent):
             content=seed.content,
         )
 
-        response = self.run(user_prompt, max_tokens=2048)
+        response = self.run(user_prompt, max_tokens=3072)
         if dry_run:
             return response
 

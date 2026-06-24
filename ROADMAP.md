@@ -683,3 +683,59 @@ local (en Madrid en verano), dando la sensación de "vencido sin publicar".
 - [x] 17.5 — `POST /api/drafts/{id}/schedule` aplica `localize_to_utc`
 - [x] 17.6 — Tests: 371 tests totales, todos pasan (+6 nuevos); ruff sin nuevos errores
 - [x] Documentación: `docs/publicacion-programada.md` + `.env.example` actualizados
+
+---
+
+## Fase 18 — Eliminación permanente de borradores
+
+### Contexto
+
+No existía forma de eliminar un borrador: una vez generado, el fichero
+markdown quedaba en `data/drafts/` indefinidamente, incluso tras ser
+rechazado o abandonado. Además, al borrar "a mano" los borradores de una
+idea, ésta se quedaba bloqueada en estado `used` (o `discarded`) sin forma
+de volver a generar borradores sobre ella, obligando a intervenir el
+frontmatter manualmente.
+
+### Plan de implementación
+
+#### 18.1 API REST
+
+- Nuevo endpoint `DELETE /api/drafts/{draft_id}` (status 204) en
+  `router_drafts.py`. Devuelve 404 si no existe y 400 si el borrador está
+  `published` (no se permite borrar el registro de algo ya publicado en
+  redes).
+- Tras borrar, si la idea asociada (`draft.idea_id`) se queda sin ningún
+  borrador, se revierte a `IdeaStatus.pending` con independencia del estado
+  previo (`used`, `discarded`, ...) para poder reutilizarla. La escritura
+  se omite si la idea ya estaba `pending` (no-op idempotente).
+
+#### 18.2 CLI
+
+- Nuevo comando `drafts delete <draft_id>` en `commands.py` con la misma
+  lógica (bloqueo de `published` + reversión de idea). Mensaje extra
+  `Idea '<id>' reverted to pending.` cuando procede.
+
+#### 18.3 Frontend
+
+- `drafts.astro`: botón "Eliminar" (icono `trash`) en cada tarjeta, oculto
+  para borradores `published`. Confirmación vía modal `confirm-dialog`
+  existente; llama a `DELETE /api/drafts/{id}` y recarga la lista.
+- `drafts/edit.astro`: botón "Eliminar" (estilo `btn-error btn-outline`)
+  en el pie del formulario, oculto para `published`. Confirmación vía
+  `window.confirm`; redirige a `/drafts` tras borrar.
+
+#### 18.4 Tests
+
+- `tests/test_api.py` — `TestDraftsDeleteAPI` (6 tests): borrado OK,
+  not found, published bloqueado, último borrador revierte idea, idea se
+  mantiene cuando quedan borradores, reversión independiente del estado.
+- `tests/test_cli.py` — `TestDraftsDelete` (6 tests): equivalente CLI +
+  caso idea ya `pending` (sin mensaje de reversión).
+
+### Fase 18 — Eliminación permanente de borradores
+
+- [x] 18.1 — `DELETE /api/drafts/{draft_id}` con bloqueo de `published` y reversión de idea
+- [x] 18.2 — Comando CLI `drafts delete` con misma lógica
+- [x] 18.3 — Frontend: botón eliminar en listado y edición de borradores
+- [x] 18.4 — Tests: +12 tests backend; `pnpm check` 0 errores; `pnpm test` 69 pass; `pnpm build` OK

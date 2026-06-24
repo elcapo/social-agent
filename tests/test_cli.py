@@ -9,7 +9,7 @@ from click.testing import CliRunner
 from social_agent.cli.commands import cli
 from social_agent.config import settings as global_settings
 from social_agent.models.draft import Draft, DraftStatus
-from social_agent.models.idea import Idea
+from social_agent.models.idea import Idea, IdeaStatus
 from social_agent.models.seed import Seed
 from social_agent.storage.markdown_store import MarkdownStore
 
@@ -544,3 +544,73 @@ class TestSeedsAdd:
         assert r2.exit_code == 0
         seeds = cli_seed_store.list()
         assert len(seeds) == 2
+
+
+# ── Drafts delete ──
+
+
+class TestDraftsDelete:
+    def test_delete_draft(self, runner, cli_draft_store, cli_idea_store):
+        idea = _make_idea(cli_idea_store, status=IdeaStatus.used)
+        draft = _make_draft(cli_draft_store, idea_id=idea.id)
+
+        result = runner.invoke(cli, ["drafts", "delete", draft.id])
+        assert result.exit_code == 0
+        assert "deleted" in result.output
+        assert cli_draft_store.get(draft.id) is None
+        # Idea reverted to pending.
+        assert cli_idea_store.get(idea.id).status == IdeaStatus.pending
+        assert "reverted to pending" in result.output
+
+    def test_delete_not_found(self, runner, cli_draft_store):
+        result = runner.invoke(cli, ["drafts", "delete", "nonexistent"])
+        assert result.exit_code == 0
+        assert "not found" in result.output
+
+    def test_delete_published_blocked(self, runner, cli_draft_store, cli_idea_store):
+        idea = _make_idea(cli_idea_store, status=IdeaStatus.used)
+        draft = _make_draft(
+            cli_draft_store, idea_id=idea.id, status=DraftStatus.published,
+        )
+
+        result = runner.invoke(cli, ["drafts", "delete", draft.id])
+        assert result.exit_code == 0
+        assert "published" in result.output
+        # Draft and idea untouched.
+        assert cli_draft_store.get(draft.id) is not None
+        assert cli_idea_store.get(idea.id).status == IdeaStatus.used
+
+    def test_delete_keeps_idea_when_other_drafts_remain(
+        self, runner, cli_draft_store, cli_idea_store,
+    ):
+        idea = _make_idea(cli_idea_store, status=IdeaStatus.used)
+        d1 = _make_draft(cli_draft_store, idea_id=idea.id)
+        _make_draft(cli_draft_store, idea_id=idea.id, platform="linkedin")
+
+        result = runner.invoke(cli, ["drafts", "delete", d1.id])
+        assert result.exit_code == 0
+        # One draft remains, idea stays used, no reversion message.
+        assert cli_idea_store.get(idea.id).status == IdeaStatus.used
+        assert "reverted to pending" not in result.output
+        assert len(cli_draft_store.list()) == 1
+
+    def test_delete_reverts_idea_regardless_of_state(
+        self, runner, cli_draft_store, cli_idea_store,
+    ):
+        idea = _make_idea(cli_idea_store, status=IdeaStatus.discarded)
+        draft = _make_draft(cli_draft_store, idea_id=idea.id)
+
+        result = runner.invoke(cli, ["drafts", "delete", draft.id])
+        assert result.exit_code == 0
+        assert cli_idea_store.get(idea.id).status == IdeaStatus.pending
+
+    def test_delete_already_pending_idea_no_revert_message(
+        self, runner, cli_draft_store, cli_idea_store,
+    ):
+        idea = _make_idea(cli_idea_store, status=IdeaStatus.pending)
+        draft = _make_draft(cli_draft_store, idea_id=idea.id)
+
+        result = runner.invoke(cli, ["drafts", "delete", draft.id])
+        assert result.exit_code == 0
+        assert cli_idea_store.get(idea.id).status == IdeaStatus.pending
+        assert "reverted to pending" not in result.output

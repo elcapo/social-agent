@@ -41,6 +41,7 @@ class UpdateDraftRequest(BaseModel):
     content: Optional[str] = None
     notes: Optional[str] = None
     media_urls: Optional[list[str]] = None
+    scheduled_at: Optional[datetime] = None
 
 
 class AttachMediaRequest(BaseModel):
@@ -175,6 +176,18 @@ def update_draft(draft_id: str, body: UpdateDraftRequest) -> Draft:
     if body.media_urls is not None:
         draft.media_urls = body.media_urls
 
+    updates = body.model_dump(exclude_unset=True)
+    if "scheduled_at" in updates:
+        if updates["scheduled_at"] is not None:
+            if draft.status == DraftStatus.published:
+                raise HTTPException(400, "Cannot schedule a draft that is already published")
+            draft.scheduled_at = localize_to_utc(updates["scheduled_at"])
+            draft.status = DraftStatus.approved
+        else:
+            draft.scheduled_at = None
+            if draft.status == DraftStatus.approved:
+                draft.status = DraftStatus.draft
+
     draft_store.save(draft)
     return draft
 
@@ -235,3 +248,22 @@ def unschedule_draft(draft_id: str) -> Draft:
     draft.scheduled_at = None
     draft_store.save(draft)
     return draft
+
+
+@router.delete("/drafts/{draft_id}", status_code=204)
+def delete_draft(draft_id: str) -> None:
+    draft = draft_store.get(draft_id)
+    if not draft:
+        raise HTTPException(404, f"Draft '{draft_id}' not found")
+
+    if draft.status == DraftStatus.published:
+        raise HTTPException(400, "Cannot delete a draft that is already published")
+
+    draft_store.delete(draft_id)
+
+    idea = idea_store.get(draft.idea_id)
+    if idea:
+        remaining = draft_store.list(filter_fn=lambda d: d.idea_id == idea.id)
+        if not remaining and idea.status != IdeaStatus.pending:
+            idea.status = IdeaStatus.pending
+            idea_store.save(idea)

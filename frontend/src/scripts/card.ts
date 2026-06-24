@@ -85,3 +85,8 @@ export function actionsWrap(actions: string): string {
 export function metaWrap(meta: string): string {
   return `<div class="flex items-center gap-3 flex-wrap min-w-0">${meta}</div>`;
 }
+
+export function errorBlock(msg: string | null | undefined): string {
+  if (!msg) return "";
+  return `<div class="alert alert-error py-2 px-3 text-xs gap-1.5" role="alert" aria-live="polite">${icon("circle-x", 14)} <span class="whitespace-pre-line break-words">${esc(msg)}</span></div>`;
+}

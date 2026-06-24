@@ -616,6 +616,37 @@ def drafts_reject(draft_id: str, notes: str) -> None:
     click.echo(f"Draft '{draft_id}' rejected.")
 
 
+@drafts.command("delete")
+@click.argument("draft_id")
+def drafts_delete(draft_id: str) -> None:
+    """Permanently delete a draft.
+
+    A published draft cannot be deleted. When the last draft of an idea is
+    removed, the idea is reverted to 'pending' so it can be reused.
+    """
+    draft = draft_store.get(draft_id)
+    if not draft:
+        click.echo(f"Draft '{draft_id}' not found.")
+        return
+
+    if draft.status == DraftStatus.published:
+        click.echo(f"Draft '{draft_id}' is published and cannot be deleted.")
+        return
+
+    draft_store.delete(draft_id)
+    click.echo(f"Draft '{draft_id}' deleted.")
+
+    idea = idea_store.get(draft.idea_id)
+    if idea:
+        remaining = draft_store.list(filter_fn=lambda d: d.idea_id == idea.id)
+        if not remaining:
+            changed = idea.status != IdeaStatus.pending
+            idea.status = IdeaStatus.pending
+            idea_store.save(idea)
+            if changed:
+                click.echo(f"Idea '{idea.id}' reverted to pending.")
+
+
 @drafts.command("edit")
 @click.argument("draft_id")
 @click.argument("new_content")

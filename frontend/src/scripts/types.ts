@@ -43,14 +43,26 @@ export interface Draft {
   scheduled_at?: string | null;
   notes?: string;
   status: string;
+  publish_error?: string | null;
+  publish_attempts?: number;
+  platform_post_id?: string | null;
   created_at?: string;
 }
 
 export interface ScheduledDraft extends Draft {}
 
+export interface ScheduledItemResult {
+  draft_id: string;
+  platform: string;
+  success: boolean;
+  platform_post_id?: string | null;
+  error?: string | null;
+}
+
 export interface SchedulerResult {
   published: number;
   failed: number;
+  results?: ScheduledItemResult[];
 }
 
 export interface ScrapeResult {

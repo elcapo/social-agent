@@ -943,6 +943,36 @@ class TestDraftsAPI:
         assert resp.json()["content"] == "new content"
         assert resp.json()["status"] == "draft"
 
+    def test_update_draft_scheduled_at_sets_approved(self, client):
+        draft = _create_test_draft(client)
+        when = "2026-06-20T15:30:00+00:00"
+        resp = client.patch(f"/api/drafts/{draft['id']}", json={"scheduled_at": when})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scheduled_at"] is not None
+        assert data["status"] == "approved"
+
+    def test_update_draft_clear_scheduled_at_reverts_to_draft(self, client):
+        draft = _create_test_draft(client)
+        client.patch(f"/api/drafts/{draft['id']}", json={"scheduled_at": "2026-06-20T15:30:00"})
+        assert client.get(f"/api/drafts/{draft['id']}").json()["status"] == "approved"
+        resp = client.patch(f"/api/drafts/{draft['id']}", json={"scheduled_at": None})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scheduled_at"] is None
+        assert data["status"] == "draft"
+
+    def test_update_draft_omit_scheduled_at_preserves_schedule(self, client):
+        draft = _create_test_draft(client)
+        client.post(f"/api/drafts/{draft['id']}/schedule", json={"scheduled_at": "2026-06-20T15:30"})
+        before = client.get(f"/api/drafts/{draft['id']}").json()
+        resp = client.patch(f"/api/drafts/{draft['id']}", json={"notes": "edited notes"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["notes"] == "edited notes"
+        assert data["scheduled_at"] == before["scheduled_at"]
+        assert data["status"] == "approved"
+
     def test_attach_media_to_draft(self, client):
         draft = _create_test_draft(client)
         resp = client.post(
@@ -1200,6 +1230,82 @@ class TestPublishAPI:
         resp = client.get("/api/health")
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
+
+
+# ── Drafts delete ──
+
+
+class TestDraftsDeleteAPI:
+    def test_delete_draft(self, client):
+        draft = _create_test_draft(client)
+        resp = client.delete(f"/api/drafts/{draft['id']}")
+        assert resp.status_code == 204
+        get = client.get(f"/api/drafts/{draft['id']}")
+        assert get.status_code == 404
+
+    def test_delete_draft_not_found(self, client):
+        resp = client.delete("/api/drafts/nonexistent")
+        assert resp.status_code == 404
+
+    def test_delete_published_draft_blocked(self, client):
+        draft = _create_test_draft(client)
+        client.patch(f"/api/drafts/{draft['id']}", json={"status": "published"})
+        resp = client.delete(f"/api/drafts/{draft['id']}")
+        assert resp.status_code == 400
+        assert "published" in resp.json()["detail"]
+        # Draft is still there
+        assert client.get(f"/api/drafts/{draft['id']}").status_code == 200
+
+    def test_delete_last_draft_reverts_idea_to_pending(self, client):
+        idea = _create_test_idea(client)
+        with patch("social_agent.agents.writer.WriterAgent.run", return_value=MOCK_DRAFT):
+            client.post("/api/drafts/generate", json={
+                "idea_id": idea["id"],
+                "platforms": ["twitter"],
+            })
+
+        # Idea moved to 'used' by draft generation.
+        assert client.get(f"/api/ideas/{idea['id']}").json()["status"] == "used"
+
+        draft = client.get("/api/drafts").json()[0]
+        resp = client.delete(f"/api/drafts/{draft['id']}")
+        assert resp.status_code == 204
+
+        idea_status = client.get(f"/api/ideas/{idea['id']}").json()["status"]
+        assert idea_status == "pending"
+
+    def test_delete_draft_keeps_idea_when_other_drafts_remain(self, client):
+        idea = _create_test_idea(client)
+        with patch("social_agent.agents.writer.WriterAgent.run", return_value=MOCK_DRAFT):
+            client.post("/api/drafts/generate", json={
+                "idea_id": idea["id"],
+                "platforms": ["twitter", "linkedin"],
+            })
+
+        drafts = client.get("/api/drafts").json()
+        assert len(drafts) == 2
+
+        client.delete(f"/api/drafts/{drafts[0]['id']}")
+
+        # One draft remains, idea must stay 'used'.
+        assert client.get(f"/api/ideas/{idea['id']}").json()["status"] == "used"
+        assert len(client.get("/api/drafts").json()) == 1
+
+    def test_delete_last_draft_reverts_idea_regardless_of_state(self, client):
+        idea = _create_test_idea(client)
+        with patch("social_agent.agents.writer.WriterAgent.run", return_value=MOCK_DRAFT):
+            client.post("/api/drafts/generate", json={
+                "idea_id": idea["id"],
+                "platforms": ["twitter"],
+            })
+
+        # Force the idea into 'discarded' to prove reversion is state-agnostic.
+        client.patch(f"/api/ideas/{idea['id']}", json={"status": "discarded"})
+
+        draft = client.get("/api/drafts").json()[0]
+        client.delete(f"/api/drafts/{draft['id']}")
+
+        assert client.get(f"/api/ideas/{idea['id']}").json()["status"] == "pending"
 
 
 # ── Helpers ──

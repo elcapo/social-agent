@@ -13,6 +13,7 @@ import {
   urlRow,
   actionsWrap,
   metaWrap,
+  errorBlock,
 } from "~/scripts/card";
 import { icon } from "~/scripts/icons";
 
@@ -269,5 +270,33 @@ describe("actionsWrap / metaWrap", () => {
     const html = metaWrap("INNER");
     expect(html.startsWith("<div")).toBe(true);
     expect(html).toContain("INNER");
+  });
+});
+
+describe("errorBlock", () => {
+  it("devuelve cadena vacía para null/undefined/cadena vacía", () => {
+    expect(errorBlock(null)).toBe("");
+    expect(errorBlock(undefined)).toBe("");
+    expect(errorBlock("")).toBe("");
+  });
+
+  it("renderiza un alert-error con el mensaje y role=alert", () => {
+    const html = errorBlock("403 Forbidden");
+    expect(html).toContain("alert-error");
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("403 Forbidden");
+  });
+
+  it("respeta saltos de línea con whitespace-pre-line", () => {
+    const html = errorBlock("línea 1\nlínea 2");
+    expect(html).toContain("whitespace-pre-line");
+    expect(html).toContain("línea 1");
+    expect(html).toContain("línea 2");
+  });
+
+  it("escapa HTML peligroso (XSS)", () => {
+    const html = errorBlock('<script>alert(1)</script>');
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });

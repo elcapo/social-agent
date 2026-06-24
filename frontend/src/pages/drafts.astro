@@ -103,6 +103,7 @@ import Icon from "../components/Icon.astro";
       actionEdit,
       metaChip,
       metaWrap,
+      errorBlock,
     } from "~/scripts/card";
     import type { Draft, Idea, SchedulerResult } from "~/scripts/types";
 
@@ -205,6 +206,9 @@ import Icon from "../components/Icon.astro";
       if (d.status === "approved") {
         parts.push(actionBtn("publish", d.id, "send", "Publicar borrador", "text-primary"));
       }
+      if (d.status !== "published") {
+        parts.push(actionBtn("delete", d.id, "trash", "Eliminar borrador permanentemente", "text-error"));
+      }
       return parts.join("");
     }
 
@@ -231,7 +235,7 @@ import Icon from "../components/Icon.astro";
             statusLabel(d.status),
             STATUS_LABELS[d.status] || "badge-ghost"
           )}`;
-          const body = `<div class="line-clamp-3" title="${escAttr(d.content || "")}">${esc(d.content || "—")}</div>`;
+          const body = `<div class="line-clamp-3" title="${escAttr(d.content || "")}">${esc(d.content || "—")}</div>${errorBlock(d.status === "failed" ? d.publish_error : null)}`;
           const meta =
             metaChip("clock", d.created_at ? new Date(d.created_at).toLocaleDateString() : "—") +
             contextBadge(null, d.platform, "Plataforma");
@@ -277,6 +281,12 @@ import Icon from "../components/Icon.astro";
             if (!ok) return;
             const res = await fetch(`${API}/publish/${id}`, { method: "POST" });
             if (!res.ok) throw new Error(await getErrorMessage(res));
+            const draft = (await res.json()) as Draft;
+            if (draft.status === "failed") {
+              showError("No se pudo publicar: " + (draft.publish_error || "error desconocido"));
+            } else {
+              showInfo("Publicado correctamente.");
+            }
             break;
           }
           case "unschedule": {
@@ -284,6 +294,14 @@ import Icon from "../components/Icon.astro";
             if (!ok) return;
             const res = await fetch(`${API}/drafts/${id}/unschedule`, { method: "POST" });
             if (!res.ok) throw new Error(await getErrorMessage(res));
+            break;
+          }
+          case "delete": {
+            const ok = await askConfirm("¿Eliminar este borrador permanentemente? Esta acción no se puede deshacer.");
+            if (!ok) return;
+            const res = await fetch(`${API}/drafts/${id}`, { method: "DELETE" });
+            if (!res.ok) throw new Error(await getErrorMessage(res));
+            showInfo("Borrador eliminado.");
             break;
           }
         }
@@ -305,7 +323,22 @@ import Icon from "../components/Icon.astro";
         if (data.published === 0 && data.failed === 0) {
           showInfo("No hay borradores listos para publicar.");
         } else {
-          showInfo(`Planificador: ${data.published} publicados, ${data.failed} fallidos.`);
+          const failedItems = (data.results || []).filter((r) => !r.success);
+          const summary = `Planificador: ${data.published} publicados, ${data.failed} fallidos.`;
+          if (failedItems.length) {
+            const list = failedItems
+              .map(
+                (r) =>
+                  `<li class="text-xs"><span class="font-mono">${esc(r.draft_id)}</span> <span class="text-base-content/60">(${esc(r.platform)})</span><br><span class="whitespace-pre-line break-words">${esc(r.error || "error desconocido")}</span></li>`
+              )
+              .join("");
+            errorEl.innerHTML = `${icon("circle-x", 16)} <div><div>${summary}</div><details class="mt-1"><summary class="cursor-pointer text-xs text-base-content/70">Ver ${failedItems.length} error(es)</summary><ul class="mt-1 space-y-1">${list}</ul></details></div>`;
+            errorEl.classList.remove("alert-info");
+            errorEl.classList.add("alert-error");
+            errorEl.classList.remove("hidden");
+          } else {
+            showInfo(summary);
+          }
         }
         load();
       } catch (e) {

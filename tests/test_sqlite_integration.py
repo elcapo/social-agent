@@ -265,6 +265,60 @@ class TestDraftsSQLiteAPI:
         assert body["published"] == 0
         assert body["failed"] == 0
 
+    def test_publish_failed_returns_200_with_error(self, client, sqlite_backends, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from social_agent.models.draft import Draft, DraftStatus
+        from social_agent.publishers.base import PublishResult
+
+        sqlite_backends["drafts"].save(
+            Draft(idea_id="i", platform="twitter", content="dup", status=DraftStatus.approved)
+        )
+        did = sqlite_backends["drafts"].list()[0].id
+
+        fake = MagicMock()
+        fake.publish.return_value = PublishResult(
+            success=False,
+            error="403 Forbidden\nYou are not allowed to create a Tweet with duplicate content.",
+        )
+
+        import social_agent.api.router_publish as rp
+
+        monkeypatch.setattr(rp, "_get_publisher", lambda platform: fake)
+
+        resp = client.post(f"/api/publish/{did}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "failed"
+        assert body["publish_error"] is not None
+        assert "duplicate content" in body["publish_error"]
+        assert body["publish_attempts"] == 1
+
+    def test_publish_success_returns_200_with_post_id(self, client, sqlite_backends, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from social_agent.models.draft import Draft, DraftStatus
+        from social_agent.publishers.base import PublishResult
+
+        sqlite_backends["drafts"].save(
+            Draft(idea_id="i", platform="twitter", content="ok", status=DraftStatus.approved)
+        )
+        did = sqlite_backends["drafts"].list()[0].id
+
+        fake = MagicMock()
+        fake.publish.return_value = PublishResult(success=True, platform_post_id="12345")
+
+        import social_agent.api.router_publish as rp
+
+        monkeypatch.setattr(rp, "_get_publisher", lambda platform: fake)
+
+        resp = client.post(f"/api/publish/{did}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "published"
+        assert body["platform_post_id"] == "12345"
+        assert body["publish_error"] is None
+
 
 # ── Ideas ──────────────────────────────────────────────────────────────────
 

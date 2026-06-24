@@ -58,11 +58,10 @@ import Icon from "../../components/Icon.astro";
 
         <label class="label">Programación</label>
         <div id="draft-schedule-display" class="text-sm text-base-content/60 mb-2"></div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <input type="datetime-local" id="draft-scheduled-at" class="input input-sm w-auto" />
-          <button class="btn btn-sm btn-primary" id="btn-schedule">Programar</button>
-          <button class="btn btn-sm btn-ghost" id="btn-unschedule">Quitar programación</button>
-        </div>
+        <input type="datetime-local" id="draft-scheduled-at" class="input input-sm w-auto" />
+
+        <label class="label">Resultado de publicación</label>
+        <div id="draft-publish-result" class="text-sm text-base-content/60"></div>
 
         <label class="label">Notas</label>
         <div id="draft-notes" class="text-sm text-base-content/60"></div>
@@ -73,8 +72,10 @@ import Icon from "../../components/Icon.astro";
 
       <div class="flex gap-3 mt-6">
         <a href="/drafts" class="btn">Cancelar</a>
-        <button class="btn" id="btn-upload-file">Subir archivo</button>
         <button class="btn btn-primary" id="btn-save">Guardar cambios</button>
+        <button class="btn btn-error btn-outline ml-auto hidden" id="btn-delete">
+          <Icon name="trash" size={16} /> Eliminar
+        </button>
       </div>
     </div>
 
@@ -104,9 +105,7 @@ import Icon from "../../components/Icon.astro";
     const readonlyNotice = byId("readonly-notice");
     const readonlyMsg = byId("readonly-msg");
     const btnSave = byId<HTMLButtonElement>("btn-save");
-    const btnUpload = byId<HTMLButtonElement>("btn-upload-file");
-    const btnSchedule = byId<HTMLButtonElement>("btn-schedule");
-    const btnUnschedule = byId<HTMLButtonElement>("btn-unschedule");
+    const btnDelete = byId<HTMLButtonElement>("btn-delete");
     const scheduleInput = byId<HTMLInputElement>("draft-scheduled-at");
     const uploadSection = byId("draft-upload-section");
     const editableInputs: HTMLTextAreaElement[] = [
@@ -114,7 +113,7 @@ import Icon from "../../components/Icon.astro";
       byId<HTMLTextAreaElement>("draft-media-urls"),
     ];
 
-    const READONLY_STATUSES = ["approved", "rejected", "published", "failed"];
+    const READONLY_STATUSES = ["rejected", "published", "failed"];
     const STATUS_ES: Record<string, string> = {
       draft: "borrador",
       approved: "aprobado",
@@ -129,14 +128,13 @@ import Icon from "../../components/Icon.astro";
         el.disabled = !editable;
         el.readOnly = !editable;
       });
+      scheduleInput.disabled = !editable;
       if (editable) {
         readonlyNotice.classList.add("hidden");
         btnSave.classList.remove("hidden");
-        btnUpload.classList.remove("hidden");
         uploadSection.classList.remove("hidden");
       } else {
         btnSave.classList.add("hidden");
-        btnUpload.classList.add("hidden");
         uploadSection.classList.add("hidden");
       }
     }
@@ -201,8 +199,17 @@ import Icon from "../../components/Icon.astro";
       }
       scheduleInput.value = toLocalInputValue(scheduledAt);
       scheduleInput.disabled = published;
-      btnSchedule.disabled = published;
-      btnUnschedule.disabled = published || !scheduledAt;
+    }
+
+    function updatePublishResultDisplay(draft: Draft) {
+      const display = byId("draft-publish-result");
+      if (draft.status === "failed" && draft.publish_error) {
+        display.innerHTML = `<div class="alert alert-error py-2 px-3 text-xs gap-1.5" role="alert" aria-live="polite">${icon("circle-x", 14)} <span class="whitespace-pre-line break-words">${esc(draft.publish_error)}</span></div>`;
+      } else if (draft.status === "published" && draft.platform_post_id) {
+        display.innerHTML = `<div class="alert alert-success py-2 px-3 text-xs gap-1.5">${icon("check", 14)} <span>Publicación: <span class="font-mono">${esc(draft.platform_post_id)}</span></span></div>`;
+      } else {
+        display.innerHTML = '<span class="text-base-content/60">Sin publicar</span>';
+      }
     }
 
     async function load() {
@@ -231,6 +238,7 @@ import Icon from "../../components/Icon.astro";
       byId<HTMLTextAreaElement>("draft-media-urls").value = (draft.media_urls || []).join("\n");
       updateMediaPathsDisplay(draft.media_paths);
       updateScheduleDisplay(draft.scheduled_at, draft.status);
+      updatePublishResultDisplay(draft);
       byId("draft-notes").textContent = draft.notes || "—";
       byId("draft-created").textContent = draft.created_at
         ? new Date(draft.created_at).toLocaleString()
@@ -244,97 +252,44 @@ import Icon from "../../components/Icon.astro";
       } else {
         setTimeout(() => byId<HTMLTextAreaElement>("draft-content").focus(), 0);
       }
+
+      if (draft.status !== "published") {
+        btnDelete.classList.remove("hidden");
+      } else {
+        btnDelete.classList.add("hidden");
+      }
     }
-
-    btnUpload.addEventListener("click", async () => {
-      const fileInput = byId<HTMLInputElement>("draft-media-file");
-      const file = fileInput.files?.[0];
-      if (!file) {
-        showError("Selecciona un archivo primero.");
-        return;
-      }
-
-      btnUpload.disabled = true;
-      btnUpload.textContent = "Subiendo…";
-      hideAll();
-
-      try {
-        const form = new FormData();
-        form.append("file", file);
-        const res = await fetch(`${API}/drafts/${draftId}/upload-media`, {
-          method: "POST",
-          body: form,
-        });
-        if (!res.ok) throw new Error(await getErrorMessage(res));
-        fileInput.value = "";
-        showSuccess("Archivo subido correctamente.");
-        load();
-      } catch (e) {
-        showError("Error: " + (e as Error).message);
-      } finally {
-        btnUpload.disabled = false;
-        btnUpload.textContent = "Subir archivo";
-      }
-    });
-
-    btnSchedule.addEventListener("click", async () => {
-      const raw = scheduleInput.value;
-      if (!raw) {
-        showError("Elige primero fecha y hora.");
-        return;
-      }
-      const iso = new Date(raw).toISOString();
-
-      btnSchedule.disabled = true;
-      btnSchedule.textContent = "Programando…";
-      hideAll();
-
-      try {
-        const res = await fetch(`${API}/drafts/${draftId}/schedule`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scheduled_at: iso }),
-        });
-        if (!res.ok) throw new Error(await getErrorMessage(res));
-        showSuccess("Borrador programado.");
-        load();
-      } catch (e) {
-        showError("Error: " + (e as Error).message);
-      } finally {
-        btnSchedule.disabled = false;
-        btnSchedule.textContent = "Programar";
-      }
-    });
-
-    btnUnschedule.addEventListener("click", async () => {
-      btnUnschedule.disabled = true;
-      btnUnschedule.textContent = "Quitando…";
-      hideAll();
-
-      try {
-        const res = await fetch(`${API}/drafts/${draftId}/unschedule`, { method: "POST" });
-        if (!res.ok) throw new Error(await getErrorMessage(res));
-        showSuccess("Programación quitada.");
-        load();
-      } catch (e) {
-        showError("Error: " + (e as Error).message);
-      } finally {
-        btnUnschedule.disabled = false;
-        btnUnschedule.textContent = "Quitar programación";
-      }
-    });
 
     btnSave.addEventListener("click", async () => {
       const content = byId<HTMLTextAreaElement>("draft-content").value;
       const mediaUrlsRaw = byId<HTMLTextAreaElement>("draft-media-urls").value;
       const mediaUrls = mediaUrlsRaw.split("\n").map((s) => s.trim()).filter(Boolean);
+      const fileInput = byId<HTMLInputElement>("draft-media-file");
+      const file = fileInput.files?.[0];
 
       btnSave.disabled = true;
       btnSave.textContent = "Guardando…";
       hideAll();
 
       try {
-        const body: { content: string; media_urls?: string[] } = { content };
+        if (file) {
+          const form = new FormData();
+          form.append("file", file);
+          const uploadRes = await fetch(`${API}/drafts/${draftId}/upload-media`, {
+            method: "POST",
+            body: form,
+          });
+          if (!uploadRes.ok) throw new Error(await getErrorMessage(uploadRes));
+          fileInput.value = "";
+        }
+
+        const scheduledRaw = scheduleInput.value;
+        const scheduledAt = scheduledRaw ? new Date(scheduledRaw).toISOString() : null;
+
+        const body: { content: string; media_urls?: string[]; scheduled_at: string | null } = {
+          content,
+          scheduled_at: scheduledAt,
+        };
         if (mediaUrls.length) body.media_urls = mediaUrls;
         const res = await fetch(`${API}/drafts/${draftId}`, {
           method: "PATCH",
@@ -352,6 +307,23 @@ import Icon from "../../components/Icon.astro";
         showError("Error: " + (e as Error).message);
         btnSave.disabled = false;
         btnSave.textContent = "Guardar cambios";
+      }
+    });
+
+    btnDelete.addEventListener("click", async () => {
+      if (!draftId) return;
+      if (!window.confirm("¿Eliminar este borrador permanentemente? Esta acción no se puede deshacer.")) return;
+      btnDelete.disabled = true;
+      btnDelete.textContent = "Eliminando…";
+      hideAll();
+      try {
+        const res = await fetch(`${API}/drafts/${draftId}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(await getErrorMessage(res));
+        window.location.href = "/drafts";
+      } catch (e) {
+        showError("Error: " + (e as Error).message);
+        btnDelete.disabled = false;
+        btnDelete.textContent = "Eliminar";
       }
     });
 
