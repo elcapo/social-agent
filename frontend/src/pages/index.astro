@@ -51,7 +51,7 @@ import Icon from "../components/Icon.astro";
           <h2 class="card-title text-sm uppercase tracking-wider text-base-content/60 gap-2">
             <Icon name="send" size={16} /> Salidas
           </h2>
-          <div class="grid grid-cols-2 gap-3 mt-1">
+          <div class="grid grid-cols-3 gap-3 mt-1">
             <a
               href="/drafts?status=draft"
               class="flex flex-col items-center gap-1 p-3 rounded-box hover:bg-base-200 transition-colors duration-150 cursor-pointer no-underline"
@@ -69,6 +69,15 @@ import Icon from "../components/Icon.astro";
               <span class="text-primary"><Icon name="check-circle" size={20} /></span>
               <span class="text-2xl font-bold text-primary" id="stat-published">—</span>
               <span class="text-xs uppercase tracking-wider text-base-content/60">Publicados</span>
+            </a>
+            <a
+              href="/drafts?status=scheduled"
+              class="flex flex-col items-center gap-1 p-3 rounded-box hover:bg-base-200 transition-colors duration-150 cursor-pointer no-underline"
+              title="Ver borradores programados"
+            >
+              <span class="text-primary"><Icon name="calendar" size={20} /></span>
+              <span class="text-2xl font-bold text-primary" id="stat-scheduled">—</span>
+              <span class="text-xs uppercase tracking-wider text-base-content/60">Programados</span>
             </a>
           </div>
         </div>
@@ -148,8 +157,12 @@ import Icon from "../components/Icon.astro";
       byId("stat-ideas").textContent = String(ideas.length);
       byId("stat-drafts").textContent = String(pending.length);
       byId("stat-published").textContent = String(published.length);
+      byId("stat-scheduled").textContent = String(scheduled.length);
 
-      const recentSeeds = seeds.slice(-5).reverse();
+      const recentSeeds = seeds
+        .slice()
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .slice(0, 5);
       byId("recent-seeds").innerHTML = recentSeeds.length
         ? `<div class="flex flex-col gap-3">${recentSeeds
             .map(
@@ -165,7 +178,10 @@ import Icon from "../components/Icon.astro";
             .join("")}</div>`
         : '<div class="alert bg-base-200 text-sm">Aún no hay semillas.</div>';
 
-      const recentDrafts = drafts.slice(-5).reverse();
+      const recentDrafts = drafts
+        .slice()
+        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .slice(0, 5);
       byId("recent-drafts").innerHTML = recentDrafts.length
         ? `<div class="flex flex-col gap-3">${recentDrafts
             .map((d) => {
